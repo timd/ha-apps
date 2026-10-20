@@ -10,10 +10,7 @@ arch:
   - amd64
   - aarch64
 init: false
-startup: application
-boot: auto
 ingress: true
-ingress_port: 8099
 panel_icon: mdi:airplane
 panel_title: Overflights
 # SQLite in WAL mode can restore broken from a copy taken while it writes.
@@ -22,7 +19,6 @@ backup: cold
 # Home Assistant sensors go through the MQTT broker, if there is one.
 services:
   - mqtt:want
-watchdog: http://[HOST]:[PORT:8099]/api/health
 options:
   receiver_url: http://piaware.local/skyaware/data
   capture_radius_km: 30

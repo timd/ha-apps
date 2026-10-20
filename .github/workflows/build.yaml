@@ -18,7 +18,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: frenck/action-addon-linter@v2
         with:
           path: ./overflights
@@ -36,7 +36,7 @@ jobs:
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.arch }}-overflights
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Read the version
         id: version
