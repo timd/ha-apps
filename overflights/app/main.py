@@ -1,6 +1,7 @@
 """Overflights: log aircraft that pass near the house and chart them."""
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ from aiohttp import web
 
 import demo
 import store
+from classify import COLUMNS, JOINS, KINDS, Classifier
 from sensors import Sensors
 from collector import Collector
 
@@ -46,42 +48,56 @@ def query_args(request):
         "max_alt": int(q["max_alt"]) if q.get("max_alt") else None,
         "radius": int(q["radius"]) if q.get("radius") else None,
     }
-    where = ["min_ts >= :since", "min_ts < :until"]
+    where = ["p.min_ts >= :since", "p.min_ts < :until"]
     if args["max_alt"] is not None:
-        where.append("min_alt_ft <= :max_alt")
+        where.append("p.min_alt_ft <= :max_alt")
     if args["radius"] is not None:
-        where.append("min_dist_m <= :radius")
-    return " AND ".join(where), args
+        where.append("p.min_dist_m <= :radius")
+    kinds = set(q["kind"].split(",")) & set(KINDS) if q.get("kind") else None
+    return " AND ".join(where), args, kinds
 
 
-def read_passes(db_path, where, args):
+def classified(db, classify, where, args, kinds, order="ASC"):
+    """Yield (row..., kind) for each pass that matches, with `kind` last."""
+    rows = db.execute(
+        f"""SELECT p.id, p.min_ts, p.min_dist_m, p.min_alt_ft, p.flight, p.hex, {COLUMNS}
+            FROM passes p {JOINS} WHERE {where} ORDER BY p.min_ts {order}""",
+        args,
+    )
+    for row in rows:
+        kind = classify(*row[6:])
+        if kinds is None or kind in kinds:
+            yield (*row[:6], kind)
+
+
+def read_passes(db_path, classify, where, args, kinds):
     db = store.connect(db_path)
     try:
-        return db.execute(
-            f"""SELECT id, min_ts, min_dist_m, min_alt_ft, flight, hex
-                FROM passes WHERE {where} ORDER BY min_ts""",
-            args,
-        ).fetchall()
+        return list(classified(db, classify, where, args, kinds))
     finally:
         db.close()
 
 
-def read_tracks(db_path, where, args):
-    """Return each track as one flat list: first point, then deltas (1e-5 deg)."""
+def read_tracks(db_path, classify, where, args, kinds):
+    """Return each track as [id, kind, coords]: first point, then deltas (1e-5 deg)."""
     db = store.connect(db_path)
     try:
+        kind_of = {}
+        for row in classified(db, classify, where, args, kinds, order="DESC"):
+            kind_of[row[0]] = row[6]
+            if len(kind_of) >= MAX_TRACKS:
+                break
         rows = db.execute(
-            f"""SELECT pass_id, lat_e5, lon_e5 FROM positions
-                WHERE pass_id IN (SELECT id FROM passes WHERE {where}
-                                  ORDER BY min_ts DESC LIMIT {MAX_TRACKS})
-                ORDER BY pass_id, ts""",
-            args,
+            """SELECT pass_id, lat_e5, lon_e5 FROM positions
+               WHERE pass_id IN (SELECT value FROM json_each(?))
+               ORDER BY pass_id, ts""",
+            (json.dumps(list(kind_of)),),
         )
         tracks, current, coords, plat, plon = [], None, None, 0, 0
         for pid, lat, lon in rows:
             if pid != current:
                 current, coords, plat, plon = pid, [], 0, 0
-                tracks.append([pid, coords])
+                tracks.append([pid, kind_of[pid], coords])
             coords += (lat - plat, lon - plon)
             plat, plon = lat, lon
         return tracks
@@ -92,9 +108,15 @@ def read_tracks(db_path, where, args):
 def make_app(state):
     routes = web.RouteTableDef()
 
+    # The page names its script and stylesheet with a hash of their contents,
+    # so a browser never runs a new page with an old script after an update.
+    stamp = hashlib.sha1(b"".join((STATIC / f).read_bytes() for f in ("app.js", "style.css"))).hexdigest()[:10]
+    page = (STATIC / "index.html").read_text().replace(".js\"", f".js?v={stamp}\"").replace(
+        ".css\"", f".css?v={stamp}\"")
+
     @routes.get("/")
     async def index(_request):
-        return web.FileResponse(STATIC / "index.html")
+        return web.Response(text=page, content_type="text/html", headers={"Cache-Control": "no-cache"})
 
     @routes.get("/api/info")
     async def info(_request):
@@ -111,6 +133,7 @@ def make_app(state):
             "capture_radius_m": round(opts["capture_radius_km"] * 1000),
             "default_radius_m": round(opts["default_radius_km"] * 1000),
             "default_max_alt_ft": opts.get("default_max_altitude_ft") or None,
+            "airport": state["airport"],
             "passes": count,
             "demo_passes": demo_count,
             "first_ts": first,
@@ -123,15 +146,15 @@ def make_app(state):
 
     @routes.get("/api/passes")
     async def passes(request):
-        where, args = query_args(request)
-        rows = await asyncio.to_thread(read_passes, state["db_path"], where, args)
-        return web.json_response({"fields": ["id", "ts", "dist_m", "alt_ft", "flight", "hex"],
+        rows = await asyncio.to_thread(read_passes, state["db_path"], state["classify"],
+                                       *query_args(request))
+        return web.json_response({"fields": ["id", "ts", "dist_m", "alt_ft", "flight", "hex", "kind"],
                                   "rows": rows})
 
     @routes.get("/api/tracks")
     async def tracks(request):
-        where, args = query_args(request)
-        rows = await asyncio.to_thread(read_tracks, state["db_path"], where, args)
+        rows = await asyncio.to_thread(read_tracks, state["db_path"], state["classify"],
+                                       *query_args(request))
         return web.json_response({"limit": MAX_TRACKS, "tracks": rows})
 
     @routes.get("/api/health")
@@ -176,7 +199,12 @@ async def main():
 
     collector = Collector(db, home, base + "/aircraft.json",
                           opts["capture_radius_km"] * 1000, opts["poll_seconds"])
-    state = {"db_path": db_path, "home": home, "collector": collector, "options": opts}
+    airport = None
+    if opts.get("airport_latitude") is not None and opts.get("airport_longitude") is not None:
+        airport = [opts["airport_latitude"], opts["airport_longitude"]]
+        log.info("Arrivals and departures are checked against the airport at %.4f,%.4f", *airport)
+    state = {"db_path": db_path, "home": home, "collector": collector, "options": opts,
+             "airport": airport, "classify": Classifier(home, airport)}
 
     runner = web.AppRunner(make_app(state), access_log=None)
     await runner.setup()
@@ -187,7 +215,7 @@ async def main():
     await demo.apply(opts.get("demo_data", False), demo_db, db_path, home, base,
                      opts["capture_radius_km"] * 1000)
     demo_db.close()
-    sensors = Sensors(db_path, collector, opts["default_radius_km"] * 1000,
+    sensors = Sensors(db_path, collector, state["classify"], opts["default_radius_km"] * 1000,
                       opts.get("default_max_altitude_ft"))
     await asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"]), sensors.run())
 

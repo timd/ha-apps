@@ -10,6 +10,14 @@ configuration:
   longitude:
     name: Longitude
     description: The house position. Leave empty to read it from the receiver.
+  airport_latitude:
+    name: Airport latitude
+    description: >-
+      Optional. The main airport near the house. An arrival must then move toward it,
+      and a departure away from it.
+  airport_longitude:
+    name: Airport longitude
+    description: Optional. The main airport near the house.
   capture_radius_km:
     name: Capture radius (km)
     description: Positions further from the house than this are not stored.

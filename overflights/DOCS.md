@@ -12,6 +12,26 @@ the App records the closest approach to the house. It takes that point from the
 straight line between two consecutive positions, so it does not depend on the
 moment a position was sampled.
 
+## Arrivals, departures and transits
+
+The App sorts each pass by how its altitude changes between its first and last
+position in the capture area:
+
+| Class | Rule |
+| --- | --- |
+| Arrival | Descends by 1,000 ft or more, and is at or below 20,000 ft at its closest point. |
+| Departure | Climbs by 1,000 ft or more, and is at or below 25,000 ft at its closest point. |
+| Transit | Every other pass: level, or too high to be landing or just departed. |
+| Unclassified | Fewer than 3 positions, or no altitude. |
+
+If you set `airport_latitude` and `airport_longitude`, an arrival must also end
+at least 2 km closer to that airport than it started, and a departure 2 km
+further away. A pass that fails this check is a transit. Without an airport, the
+App counts every low descent as an arrival, for any airfield.
+
+The App classifies passes when the page asks for them, so a change to these
+options also applies to the passes that are already stored.
+
 The page filters by radius and by altitude at the closest point. The radius
 is only a view filter, so you can change it at any time without losing data.
 
@@ -21,6 +41,7 @@ is only a view filter, so you can change it at any time without losing data.
 | --- | --- |
 | `receiver_url` | The receiver's data folder, which holds `aircraft.json` and `receiver.json`. |
 | `latitude`, `longitude` | The house position. If empty, the App reads it from `receiver.json`. |
+| `airport_latitude`, `airport_longitude` | Optional. The main airport near the house, used to check arrivals and departures. |
 | `capture_radius_km` | Positions further away are not stored. |
 | `poll_seconds` | How often the App reads the receiver. |
 | `retention_days` | Passes older than this are deleted. |
@@ -38,7 +59,7 @@ count.
 | Entity | State |
 | --- | --- |
 | `sensor.overflights_today` | Overflights since midnight. Long-term statistics keep the daily totals. |
-| `sensor.overflights_last` | Callsign of the latest overflight. Attributes: time, distance, altitude, hex. |
+| `sensor.overflights_last` | Callsign of the latest overflight. Attributes: time, distance, altitude, hex, kind (arrival, departure, transit or unknown). |
 | `binary_sensor.overflights_receiver` | Off when the App has not read the receiver for 2 minutes. |
 
 ## Storage

@@ -11,6 +11,7 @@ import aiomqtt
 
 import demo
 import store
+from classify import COLUMNS, JOINS
 
 log = logging.getLogger("sensors")
 
@@ -68,8 +69,9 @@ async def broker_settings():
 
 
 class Sensors:
-    def __init__(self, db_path, collector, radius_m, max_alt_ft):
+    def __init__(self, db_path, collector, classify, radius_m, max_alt_ft):
         self.db_path = db_path
+        self.classify = classify
         self.collector = collector
         self.radius_m = radius_m
         self.max_alt_ft = max_alt_ft or None
@@ -78,17 +80,18 @@ class Sensors:
         """Return {topic: payload} for the current state. Demo passes never count."""
         lt = time.localtime()
         midnight = int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)))
-        where = "min_dist_m <= :r AND hex NOT LIKE :demo"
+        where = "p.min_dist_m <= :r AND p.hex NOT LIKE :demo"
         if self.max_alt_ft:
-            where += " AND min_alt_ft <= :alt"
+            where += " AND p.min_alt_ft <= :alt"
         args = {"r": self.radius_m, "alt": self.max_alt_ft, "demo": demo.DEMO_PREFIX + "%",
                 "midnight": midnight}
         db = store.connect(self.db_path)
         try:
-            today = db.execute(f"SELECT count(*) FROM passes WHERE min_ts >= :midnight AND {where}",
+            today = db.execute(f"SELECT count(*) FROM passes p WHERE p.min_ts >= :midnight AND {where}",
                                args).fetchone()[0]
-            last = db.execute(f"""SELECT hex, flight, min_ts, min_dist_m, min_alt_ft FROM passes
-                                  WHERE {where} ORDER BY min_ts DESC LIMIT 1""", args).fetchone()
+            last = db.execute(f"""SELECT p.hex, p.flight, p.min_ts, p.min_dist_m, p.min_alt_ft, {COLUMNS}
+                                  FROM passes p {JOINS}
+                                  WHERE {where} ORDER BY p.min_ts DESC LIMIT 1""", args).fetchone()
         finally:
             db.close()
 
@@ -98,7 +101,7 @@ class Sensors:
             f"{BASE}/receiver/state": "ON" if ok else "OFF",
         }
         if last:
-            hex_, flight, ts, dist, alt = last
+            hex_, flight, ts, dist, alt = last[:5]
             states[f"{BASE}/last/state"] = flight or hex_.upper()
             states[f"{BASE}/last/attributes"] = json.dumps({
                 "time": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(ts)),
@@ -106,6 +109,7 @@ class Sensors:
                 "altitude_ft": alt,
                 "hex": hex_,
                 "callsign": flight,
+                "kind": self.classify(*last[5:]),
             })
         return states
 

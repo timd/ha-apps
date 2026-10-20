@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Each pass is an arrival, a departure, a transit, or unclassified, from its
+  altitude profile. The map colours paths by class, the table shows it, and
+  the Type filter limits the page to one class.
+- The options `airport_latitude` and `airport_longitude`: if set, an arrival
+  must move toward the airport and a departure away from it.
+- The last-overflight sensor has a `kind` attribute.
+- The page loads its script and stylesheet by content hash, so a browser
+  never mixes an old script with a new page.
+
 ## 0.4.1
 
 - The map draws paths 3 px wide, and darker in the light theme.

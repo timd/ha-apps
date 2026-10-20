@@ -12,6 +12,10 @@
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --other: #a3a29b;
+  --arrival: #2a78d6;
+  --departure: #eb6834;
+  --transit: #1baf7a;
+  --unknown: #7a7974;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -28,6 +32,10 @@
     --series-1: #3987e5;
     --series-2: #d95926;
     --other: #5c5b57;
+    --arrival: #3987e5;
+    --departure: #d95926;
+    --transit: #199e70;
+    --unknown: #a3a29b;
   }
 }
 :root[data-theme="dark"] {
@@ -44,6 +52,10 @@
   --series-1: #3987e5;
   --series-2: #d95926;
   --other: #5c5b57;
+  --arrival: #3987e5;
+  --departure: #d95926;
+  --transit: #199e70;
+  --unknown: #a3a29b;
 }
 
 * { box-sizing: border-box; }
@@ -93,10 +105,11 @@ svg .bar:hover, svg .bar:focus { opacity: 0.75; outline: none; cursor: pointer; 
 
 #map { height: 520px; border-radius: 8px; background: var(--empty); }
 @media (max-width: 600px) { #map { height: 380px; } }
-.map-legend { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-2); font-size: 12px; }
-.ramp { display: inline-block; width: 160px; height: 10px; border-radius: 3px; }
+.map-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 8px; color: var(--text-2); font-size: 12px; }
+.map-legend .muted-note { color: var(--muted); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .leaflet-container { font: inherit; }
-/* A grey base map, so the blue paths carry the colour. */
+/* A grey base map, so the paths carry the colour. */
 .leaflet-tile-pane { filter: grayscale(1) contrast(0.85) brightness(1.06); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .leaflet-tile-pane { filter: grayscale(1) invert(1) contrast(0.8) brightness(0.75); }
@@ -110,7 +123,8 @@ table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nu
 th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
 th { color: var(--text-2); font-weight: 600; }
 th:first-child, td:first-child { text-align: left; }
-#latest td:nth-child(2), #latest th:nth-child(2) { text-align: left; }
+#latest td:nth-child(2), #latest th:nth-child(2),
+#latest td:nth-child(3), #latest th:nth-child(3) { text-align: left; }
 #latest tbody tr:hover { background: var(--empty); }
 a { color: var(--series-1); }
 

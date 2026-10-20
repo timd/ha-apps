@@ -18,7 +18,8 @@ closest approach to the house, and gives you:
 
 - heatmaps of overflights by hour of the week and by day;
 - a histogram of how close aircraft come, to help you choose a radius;
-- a map of where the aircraft fly;
+- arrivals, departures and transits, sorted by each pass's altitude profile;
+- a map of where the aircraft fly, coloured by class;
 - a table of the latest overflights;
 - Home Assistant sensors over MQTT: overflights today, the last overflight,
   and whether the receiver is online.

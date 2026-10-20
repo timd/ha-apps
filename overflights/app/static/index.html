@@ -41,6 +41,15 @@
         <option value="30000">Below 30,000 ft</option>
       </select>
     </label>
+    <label>Type
+      <select id="kind">
+        <option value="">All</option>
+        <option value="arrival">Arrivals</option>
+        <option value="departure">Departures</option>
+        <option value="transit">Transits</option>
+        <option value="unknown">Unclassified</option>
+      </select>
+    </label>
   </section>
 
   <section class="tiles" id="tiles" aria-live="polite"></section>
@@ -72,14 +81,13 @@
     <h2>Where they fly</h2>
     <p class="muted" id="map-note">Paths of the aircraft that came within the radius.</p>
     <div id="map"></div>
-    <div class="map-legend">
-      <span>Fewer paths</span><span id="map-ramp" class="ramp"></span><span>More paths</span>
-    </div>
+    <div class="map-legend" id="map-legend"></div>
   </section>
 
   <section class="card loadable">
     <h2>Latest overflights</h2>
-    <p class="muted">Point at a row to show its path on the map.</p>
+    <p class="muted">Point at a row to show its path on the map. A pass that descends is an arrival,
+      one that climbs is a departure, and one that stays level or is high is a transit.</p>
     <div class="table-wrap"><table id="latest"></table></div>
   </section>
 </main>

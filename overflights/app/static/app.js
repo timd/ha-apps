@@ -3,6 +3,14 @@
 // Sequential blue ramp, steps 100-700 of the reference palette.
 const BLUE = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5",
               "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"];
+// Pass classes, in legend order. The colours are categorical slots 1-3.
+const KINDS = [
+  { id: "arrival", label: "Arrival", plural: "Arrivals" },
+  { id: "departure", label: "Departure", plural: "Departures" },
+  { id: "transit", label: "Transit", plural: "Transits" },
+  { id: "unknown", label: "Unclassified", plural: "Unclassified" },
+];
+const KIND = Object.fromEntries(KINDS.map((k, i) => [k.id, { ...k, index: i }]));
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -23,7 +31,7 @@ const saved = {
 
 const state = {
   info: null,
-  passes: [],     // [id, ts, dist_m, alt_ft, flight, hex] within the capture radius
+  passes: [],     // [id, ts, dist_m, alt_ft, flight, hex, kind] within the capture radius
   since: 0,
   tracks: new Map(),
   trackLimitHit: false,
@@ -71,6 +79,8 @@ function ft(a) { return a == null ? "–" : fmt.format(a) + " ft"; }
 function hourLabel(h) { return String(h).padStart(2, "0") + ":00"; }
 function radiusM() { return Number($("#radius").value) * 1000; }
 function maxAlt() { return $("#max-alt").value; }
+function kindFilter() { return $("#kind").value; }
+function kindColor(kind) { return css("--" + kind); }
 
 function startOfDay(ts) {
   const d = new Date(ts * 1000);
@@ -302,8 +312,6 @@ function niceStep(max) {
 
 // ---------- map ----------
 
-const RAMP_LIGHT = BLUE.slice(6);              // 400 -> 700
-const RAMP_DARK = BLUE.slice(0, 9).reverse();  // 500 -> 100
 // Each track is drawn 3 px wide: the pixel and its eight neighbours.
 const BRUSH = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [dx, dy]));
 function hexRGB(h) { return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); }
@@ -321,7 +329,7 @@ const DensityLayer = L.Layer.extend({
     L.DomUtil.remove(this._canvas);
     map.off("moveend resize", this.redraw, this);
   },
-  setTracks(tracks) { this._tracks = tracks; this.redraw(); },
+  setTracks(tracks) { this._tracks = tracks; this.redraw(); },  // id -> {kind, pts}
   setHighlight(id) { this._highlight = id; this.redraw(); },
 
   redraw() {
@@ -345,13 +353,16 @@ const DensityLayer = L.Layer.extend({
       return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * scale - origin.y;
     };
 
-    // Count how many tracks cross each pixel. `seen` holds the last track
-    // that touched a pixel, so a track counts once however often it crosses.
+    // Count how many tracks of each class cross each pixel. `seen` holds the
+    // last track that touched a pixel, so a track counts once however often
+    // it crosses.
+    const grids = KINDS.map(() => new Float32Array(w * h));
     const grid = new Float32Array(w * h);
     const seen = new Int32Array(w * h);
     let n = 0;
-    for (const pts of tracks.values()) {
+    for (const { kind, pts } of tracks.values()) {
       n++;
+      const kgrid = grids[KIND[kind].index];
       let x0, y0;
       for (let i = 0; i < pts.length; i += 2) {
         const x1 = px(pts[i + 1]), y1 = py(pts[i]);
@@ -363,7 +374,7 @@ const DensityLayer = L.Layer.extend({
               const x = cx + dx, y = cy + dy;
               if (x < 0 || y < 0 || x >= w || y >= h) continue;
               const idx = y * w + x;
-              if (seen[idx] !== n) { seen[idx] = n; grid[idx]++; }
+              if (seen[idx] !== n) { seen[idx] = n; grid[idx]++; kgrid[idx]++; }
             }
           }
         }
@@ -376,25 +387,29 @@ const DensityLayer = L.Layer.extend({
     for (let i = 0; i < grid.length; i += 7) if (grid[i]) nz.push(grid[i]);
     nz.sort((a, b) => a - b);
     const top = Math.max(2, nz.length ? nz[Math.floor(nz.length * 0.995)] : 2);
-    const ramp = (isDark() ? RAMP_DARK : RAMP_LIGHT).map(hexRGB);
+    // Each pixel takes the colour of the class with most tracks through it.
+    // More tracks make it more opaque.
+    const colors = KINDS.map((k) => hexRGB(kindColor(k.id)));
     const img = ctx.createImageData(w, h);
     const lt = Math.log1p(top);
     for (let i = 0; i < grid.length; i++) {
       const v = grid[i];
       if (!v) continue;
       const t = Math.min(1, Math.log1p(v) / lt);
-      const c = ramp[Math.min(ramp.length - 1, Math.floor(t * ramp.length))];
+      let best = 0;
+      for (let k = 1; k < grids.length; k++) if (grids[k][i] > grids[best][i]) best = k;
+      const c = colors[best];
       const o = i * 4;
       img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
-      img.data[o + 3] = Math.round(255 * (0.75 + 0.25 * t));
+      img.data[o + 3] = Math.round(255 * (0.55 + 0.45 * t));
     }
     ctx.putImageData(img, 0, 0);
 
-    const hl = this._highlight != null && tracks.get(this._highlight);
+    const hl = this._highlight != null && tracks.get(this._highlight)?.pts;
     if (hl) {
       ctx.lineWidth = 4;
       ctx.lineJoin = "round";
-      ctx.strokeStyle = css("--series-2");
+      ctx.strokeStyle = css("--text");
       ctx.beginPath();
       for (let i = 0; i < hl.length; i += 2) {
         const x = px(hl[i + 1]), y = py(hl[i]);
@@ -425,8 +440,17 @@ function setupMap() {
 }
 
 function renderMapLegend() {
-  const ramp = isDark() ? RAMP_DARK : RAMP_LIGHT;
-  $("#map-ramp").style.background = `linear-gradient(to right, ${ramp.join(", ")})`;
+  const counts = Object.fromEntries(KINDS.map((k) => [k.id, 0]));
+  for (const t of state.tracks.values()) counts[t.kind]++;
+  const box = $("#map-legend");
+  box.replaceChildren();
+  for (const k of KINDS) {
+    if (kindFilter() && kindFilter() !== k.id) continue;
+    const item = el("span", { class: "key" }, box);
+    el("span", { class: "swatch", style: `background: ${kindColor(k.id)}` }, item);
+    item.append(`${k.plural} ${fmt.format(counts[k.id])}`);
+  }
+  el("span", { class: "muted-note", text: "Stronger colour: more aircraft" }, box);
   const n = state.tracks.size;
   $("#map-note").textContent = n
     ? `Paths of the ${state.trackLimitHit ? "newest " : ""}${fmt.format(n)} aircraft that came within ${km(radiusM())}. Scroll to zoom after clicking the map.`
@@ -439,14 +463,17 @@ function renderLatest(rows) {
   const table = $("#latest");
   table.replaceChildren();
   const head = el("tr", {}, el("thead", {}, table));
-  for (const h of ["Time", "Flight", "Closest", "Altitude", ""]) el("th", { text: h }, head);
+  for (const h of ["Time", "Flight", "Type", "Closest", "Altitude", ""]) el("th", { text: h }, head);
   const body = el("tbody", {}, table);
   for (const p of rows.slice(-100).reverse()) {
-    const [id, ts, dist, alt, flight, hex] = p;
+    const [id, ts, dist, alt, flight, hex, kind] = p;
     const tr = el("tr", {}, body);
     const d = new Date(ts * 1000);
     el("td", { text: `${dateFmt.format(d)} ${timeFmt.format(d)}` }, tr);
     el("td", { text: flight || hex.toUpperCase() }, tr);
+    const type = el("td", {}, tr);
+    el("span", { class: "swatch", style: `background: ${kindColor(kind)}` }, type);
+    type.append(KIND[kind].label);
     el("td", { text: km(dist) }, tr);
     el("td", { text: ft(alt) }, tr);
     const link = el("td", {}, tr);
@@ -459,7 +486,7 @@ function renderLatest(rows) {
     tr.addEventListener("pointerleave", () => density.setHighlight(null));
   }
   if (!rows.length) {
-    el("td", { colspan: 5, class: "empty-note", text: "No overflights in this period yet." }, el("tr", {}, body));
+    el("td", { colspan: 6, class: "empty-note", text: "No overflights in this period yet." }, el("tr", {}, body));
   }
 }
 
@@ -468,6 +495,7 @@ function renderLatest(rows) {
 function query(extra = {}) {
   const p = new URLSearchParams({ since: state.since, ...extra });
   if (maxAlt()) p.set("max_alt", maxAlt());
+  if (kindFilter()) p.set("kind", kindFilter());
   return p.toString();
 }
 
@@ -484,14 +512,14 @@ async function loadTracks() {
   const data = await getJSON("api/tracks?" + query({ radius: Math.round(radiusM()) }));
   if (seq !== trackSeq) return;
   const tracks = new Map();
-  for (const [id, deltas] of data.tracks) {
+  for (const [id, kind, deltas] of data.tracks) {
     const pts = new Float64Array(deltas.length);
     let lat = 0, lon = 0;
     for (let i = 0; i < deltas.length; i += 2) {
       lat += deltas[i]; lon += deltas[i + 1];
       pts[i] = lat / 1e5; pts[i + 1] = lon / 1e5;
     }
-    tracks.set(id, pts);
+    tracks.set(id, { kind, pts });
   }
   state.tracks = tracks;
   state.trackLimitHit = data.tracks.length >= data.limit;
@@ -560,11 +588,15 @@ async function main() {
   $("#max-alt").value = alt;
   if ($("#max-alt").value !== alt) $("#max-alt").value = "";
   $("#radius-out").textContent = km(radiusM());
+  const kind = saved.get("kind") || "";
+  $("#kind").value = kind;
+  if ($("#kind").value !== kind) $("#kind").value = "";
 
   setupMap();
   r.addEventListener("input", onRadius);
   $("#period").addEventListener("change", () => { saved.set("period", $("#period").value); reload(); });
   $("#max-alt").addEventListener("change", () => { saved.set("max_alt", $("#max-alt").value); reload(); });
+  $("#kind").addEventListener("change", () => { saved.set("kind", $("#kind").value); reload(); });
 
   let resizeTimer;
   addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 150); });
