@@ -26,6 +26,7 @@ is only a view filter, so you can change it at any time without losing data.
 | `retention_days` | Passes older than this are deleted. |
 | `default_radius_km` | The page's radius until a viewer changes it. |
 | `default_max_altitude_ft` | The page's altitude limit. 0 means any altitude. |
+| `demo_data` | Adds 60 days of demo passes, made from the receiver's last hour of real tracks. Turn it off to delete them. |
 
 ## Storage
 

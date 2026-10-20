@@ -441,7 +441,7 @@ function renderLatest(rows) {
     el("td", { text: km(dist) }, tr);
     el("td", { text: ft(alt) }, tr);
     const link = el("td", {}, tr);
-    if (!hex.startsWith("~")) {
+    if (!hex.startsWith("~") && !hex.startsWith("zz")) {
       const day = d.toISOString().slice(0, 10);
       el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(hex)}&showTrace=${day}`,
                 target: "_blank", rel: "noopener", text: "Trace" }, link);
@@ -537,6 +537,7 @@ function renderStatus() {
   parts.push(`${fmt.format(i.passes)} aircraft logged within ${km(i.capture_radius_m)}`);
   if (i.first_ts) parts.push(`since ${dateFmt.format(i.first_ts * 1000)}`);
   parts.push(`${fmt1.format(i.db_bytes / 1e6)} MB`);
+  if (i.demo_passes) parts.push(`includes ${fmt.format(i.demo_passes)} demo passes`);
   $("#status").textContent = parts.join(" · ");
 }
 

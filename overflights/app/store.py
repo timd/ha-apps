@@ -45,11 +45,11 @@ class Home:
     def __init__(self, lat, lon):
         self.lat = lat
         self.lon = lon
-        self._kx = math.radians(1) * EARTH_RADIUS_M * math.cos(math.radians(lat))
-        self._ky = math.radians(1) * EARTH_RADIUS_M
+        self.kx = math.radians(1) * EARTH_RADIUS_M * math.cos(math.radians(lat))
+        self.ky = math.radians(1) * EARTH_RADIUS_M
 
     def xy(self, lat, lon):
-        return (lon - self.lon) * self._kx, (lat - self.lat) * self._ky
+        return (lon - self.lon) * self.kx, (lat - self.lat) * self.ky
 
 
 def connect(path):

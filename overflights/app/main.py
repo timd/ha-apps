@@ -10,6 +10,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+import demo
 import store
 from collector import Collector
 
@@ -99,6 +100,7 @@ def make_app(state):
         db = store.connect(state["db_path"])
         try:
             count, first = db.execute("SELECT count(*), min(start_ts) FROM passes").fetchone()
+            demo_count = demo.count(db)
         finally:
             db.close()
         c = state["collector"]
@@ -109,6 +111,7 @@ def make_app(state):
             "default_radius_m": round(opts["default_radius_km"] * 1000),
             "default_max_alt_ft": opts.get("default_max_altitude_ft") or None,
             "passes": count,
+            "demo_passes": demo_count,
             "first_ts": first,
             "last_poll_ok": c.last_ok,
             "last_error": c.last_error,
@@ -178,6 +181,10 @@ async def main():
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
     log.info("Serving on port %d", PORT)
 
+    demo_db = store.connect(db_path)
+    await demo.apply(opts.get("demo_data", False), demo_db, db_path, home, base,
+                     opts["capture_radius_km"] * 1000)
+    demo_db.close()
     await asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"]))
 
 

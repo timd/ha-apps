@@ -1,7 +1,7 @@
 # Local App: logs aircraft that pass near the house, from the PiAware
 # receiver's aircraft.json, and charts when and where they fly.
 name: Overflights
-version: "0.1.0"
+version: "0.2.0"
 slug: overflights
 description: Logs aircraft that pass over the house and charts when and where they fly.
 arch:
@@ -25,6 +25,7 @@ options:
   retention_days: 365
   default_radius_km: 5
   default_max_altitude_ft: 0
+  demo_data: false
 schema:
   receiver_url: url
   latitude: float?
@@ -34,3 +35,4 @@ schema:
   retention_days: int(7,3650)
   default_radius_km: float(0.5,100)
   default_max_altitude_ft: int(0,60000)
+  demo_data: bool
