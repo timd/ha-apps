@@ -1,9 +1,11 @@
-# Local App: logs aircraft that pass near the house, from the PiAware
-# receiver's aircraft.json, and charts when and where they fly.
+# Logs aircraft that pass near the house from an ADS-B receiver
+# (PiAware/SkyAware, tar1090, readsb) and charts when and where they fly.
 name: Overflights
-version: "0.3.0"
+version: "0.4.0"
 slug: overflights
 description: Logs aircraft that pass over the house and charts when and where they fly.
+url: https://github.com/timd/ha-apps/tree/main/overflights
+image: ghcr.io/timd/{arch}-overflights
 arch:
   - amd64
   - aarch64
@@ -22,7 +24,7 @@ services:
   - mqtt:want
 watchdog: http://[HOST]:[PORT:8099]/api/health
 options:
-  receiver_url: http://adsb.home.arpa/skyaware/data
+  receiver_url: http://piaware.local/skyaware/data
   capture_radius_km: 30
   poll_seconds: 5
   retention_days: 365

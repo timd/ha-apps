@@ -5,7 +5,7 @@ radius of the house. Open it from the Overflights item in the sidebar.
 
 ## How it works
 
-Every few seconds the App reads `aircraft.json` from the PiAware receiver. It
+Every few seconds the App reads `aircraft.json` from the ADS-B receiver. It
 keeps each aircraft's positions inside the capture radius and groups them into
 passes. A pass ends when an aircraft is not seen for 10 minutes. For each pass,
 the App records the closest approach to the house. It takes that point from the

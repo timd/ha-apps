@@ -38,7 +38,7 @@ def remove(db):
 
 
 async def fetch_history(base_url):
-    """Read SkyAware's history snapshots: about the last hour, every 30 s."""
+    """Read the receiver's history snapshots: about the last hour, every 30 s."""
     snapshots = []
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
         for i in range(120):

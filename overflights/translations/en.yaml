@@ -1,0 +1,32 @@
+configuration:
+  receiver_url:
+    name: Receiver data URL
+    description: >-
+      The folder that holds aircraft.json and receiver.json. PiAware:
+      http://<host>/skyaware/data. tar1090 or ultrafeeder: http://<host>/tar1090/data.
+  latitude:
+    name: Latitude
+    description: The house position. Leave empty to read it from the receiver.
+  longitude:
+    name: Longitude
+    description: The house position. Leave empty to read it from the receiver.
+  capture_radius_km:
+    name: Capture radius (km)
+    description: Positions further from the house than this are not stored.
+  poll_seconds:
+    name: Poll interval (seconds)
+    description: How often the App reads the receiver.
+  retention_days:
+    name: Retention (days)
+    description: Passes older than this are deleted.
+  default_radius_km:
+    name: Overhead radius (km)
+    description: What counts as overhead. The page starts with this radius, and the sensors use it.
+  default_max_altitude_ft:
+    name: Overhead altitude limit (ft)
+    description: The page and the sensors count only aircraft below this altitude. 0 means any altitude.
+  demo_data:
+    name: Demo data
+    description: >-
+      Adds 60 days of made-up passes built from the receiver's last hour of tracks.
+      Turn it off and restart to delete them. Sensors never count them.

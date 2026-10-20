@@ -1,0 +1,79 @@
+name: Build
+
+# Lints each App and, on main, builds and pushes an image for each
+# architecture to GHCR. A version that already exists is never overwritten:
+# raise `version` in config.yaml to release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: frenck/action-addon-linter@v2
+        with:
+          path: ./overflights
+
+  build:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: aarch64
+            platform: linux/arm64
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.arch }}-overflights
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the version
+        id: version
+        run: echo "version=$(yq '.version' overflights/config.yaml)" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already published
+        id: exists
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' && steps.exists.outputs.exists == 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build, and push on main
+        if: steps.exists.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: overflights
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+          labels: |
+            io.hass.type=addon
+            io.hass.name=Overflights
+            io.hass.version=${{ steps.version.outputs.version }}
+            io.hass.arch=${{ matrix.arch }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=MIT
