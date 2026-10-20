@@ -12,6 +12,7 @@ from aiohttp import web
 
 import demo
 import store
+from sensors import Sensors
 from collector import Collector
 
 log = logging.getLogger("overflights")
@@ -170,7 +171,8 @@ async def main():
         log.warning("Home moved from %s to %s,%s: distances of older passes use the old home",
                     old, lat, lon)
     store.set_meta(db, "home", f"{lat},{lon}")
-    log.info("Home %.5f,%.5f, capture radius %.1f km", lat, lon, opts["capture_radius_km"])
+    log.info("Home %.5f,%.5f, capture radius %.1f km, time zone %s", lat, lon,
+             opts["capture_radius_km"], time.strftime("%Z"))
 
     collector = Collector(db, home, base + "/aircraft.json",
                           opts["capture_radius_km"] * 1000, opts["poll_seconds"])
@@ -185,7 +187,9 @@ async def main():
     await demo.apply(opts.get("demo_data", False), demo_db, db_path, home, base,
                      opts["capture_radius_km"] * 1000)
     demo_db.close()
-    await asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"]))
+    sensors = Sensors(db_path, collector, opts["default_radius_km"] * 1000,
+                      opts.get("default_max_altitude_ft"))
+    await asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"]), sensors.run())
 
 
 if __name__ == "__main__":

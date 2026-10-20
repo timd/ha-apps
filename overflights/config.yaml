@@ -1,7 +1,7 @@
 # Local App: logs aircraft that pass near the house, from the PiAware
 # receiver's aircraft.json, and charts when and where they fly.
 name: Overflights
-version: "0.2.0"
+version: "0.3.0"
 slug: overflights
 description: Logs aircraft that pass over the house and charts when and where they fly.
 arch:
@@ -17,6 +17,9 @@ panel_title: Overflights
 # SQLite in WAL mode can restore broken from a copy taken while it writes.
 # A cold backup stops the App for the seconds the copy takes.
 backup: cold
+# Home Assistant sensors go through the MQTT broker, if there is one.
+services:
+  - mqtt:want
 watchdog: http://[HOST]:[PORT:8099]/api/health
 options:
   receiver_url: http://adsb.home.arpa/skyaware/data

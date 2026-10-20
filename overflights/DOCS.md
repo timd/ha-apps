@@ -24,9 +24,22 @@ is only a view filter, so you can change it at any time without losing data.
 | `capture_radius_km` | Positions further away are not stored. |
 | `poll_seconds` | How often the App reads the receiver. |
 | `retention_days` | Passes older than this are deleted. |
-| `default_radius_km` | The page's radius until a viewer changes it. |
-| `default_max_altitude_ft` | The page's altitude limit. 0 means any altitude. |
+| `default_radius_km` | What counts as overhead: the page's radius until a viewer changes it, and the radius for the sensors. |
+| `default_max_altitude_ft` | The altitude limit for the page and the sensors. 0 means any altitude. |
 | `demo_data` | Adds 60 days of demo passes, made from the receiver's last hour of real tracks. Turn it off to delete them. |
+
+## Sensors
+
+If Home Assistant has an MQTT broker, such as the Mosquitto app, the App adds
+a device called Overflights with three entities. They count only passes within
+`default_radius_km` and below `default_max_altitude_ft`. Demo passes never
+count.
+
+| Entity | State |
+| --- | --- |
+| `sensor.overflights_today` | Overflights since midnight. Long-term statistics keep the daily totals. |
+| `sensor.overflights_last` | Callsign of the latest overflight. Attributes: time, distance, altitude, hex. |
+| `binary_sensor.overflights_receiver` | Off when the App has not read the receiver for 2 minutes. |
 
 ## Storage
 
