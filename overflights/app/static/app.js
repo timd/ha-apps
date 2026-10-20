@@ -1,0 +1,572 @@
+"use strict";
+
+// Sequential blue ramp, steps 100-700 of the reference palette.
+const BLUE = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5",
+              "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"];
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+const $ = (sel) => document.querySelector(sel);
+
+// ?theme=light or ?theme=dark overrides the system setting.
+const forcedTheme = new URLSearchParams(location.search).get("theme");
+if (forcedTheme === "light" || forcedTheme === "dark") document.documentElement.dataset.theme = forcedTheme;
+const fmt = new Intl.NumberFormat("en-GB");
+const fmt1 = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
+const dateFmt = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short" });
+const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+const saved = {
+  get(k) { try { return localStorage.getItem("overflights." + k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem("overflights." + k, v); } catch { /* not available */ } },
+};
+
+const state = {
+  info: null,
+  passes: [],     // [id, ts, dist_m, alt_ft, flight, hex] within the capture radius
+  since: 0,
+  tracks: new Map(),
+  trackLimitHit: false,
+};
+
+// ---------- helpers ----------
+
+function isDark() {
+  const t = document.documentElement.dataset.theme;
+  if (t) return t === "dark";
+  return matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function css(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// Low values recede toward the surface: light end on a light page, dark end on a dark one.
+function seqColor(v, max) {
+  if (!v) return css("--empty");
+  const ramp = isDark() ? BLUE.slice(0, 11).reverse() : BLUE.slice(1);
+  const i = Math.min(ramp.length - 1, Math.floor((v / max) * ramp.length));
+  return ramp[i];
+}
+
+function el(tag, attrs = {}, parent) {
+  const node = tag in { svg: 1, rect: 1, text: 1, line: 1, g: 1 }
+    ? document.createElementNS(SVG_NS, tag) : document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "text") node.textContent = v;
+    else node.setAttribute(k, v);
+  }
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+async function getJSON(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+  return r.json();
+}
+
+function km(m) { return fmt1.format(m / 1000) + " km"; }
+function ft(a) { return a == null ? "–" : fmt.format(a) + " ft"; }
+function hourLabel(h) { return String(h).padStart(2, "0") + ":00"; }
+function radiusM() { return Number($("#radius").value) * 1000; }
+function maxAlt() { return $("#max-alt").value; }
+
+function startOfDay(ts) {
+  const d = new Date(ts * 1000);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function filtered() {
+  const r = radiusM();
+  return state.passes.filter((p) => p[2] <= r);
+}
+
+// ---------- tooltip ----------
+
+const tip = $("#tooltip");
+function showTip(evt, value, label) {
+  tip.replaceChildren(el("strong", { text: value }), document.createTextNode(label));
+  tip.hidden = false;
+  let x, y;
+  if (evt.clientX !== undefined && evt.type !== "focus") {
+    x = evt.clientX; y = evt.clientY;
+  } else {
+    const b = evt.target.getBoundingClientRect();
+    x = b.right; y = b.top;
+  }
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(x + 14, innerWidth - w - 8) + "px";
+  tip.style.top = (y - h - 10 < 8 ? y + 16 : y - h - 10) + "px";
+}
+function hideTip() { tip.hidden = true; }
+function hoverable(node, value, label) {
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("aria-label", `${label}: ${value}`);
+  node.addEventListener("pointermove", (e) => showTip(e, value, label));
+  node.addEventListener("focus", (e) => showTip(e, value, label));
+  node.addEventListener("pointerleave", hideTip);
+  node.addEventListener("blur", hideTip);
+}
+
+// ---------- tiles ----------
+
+function periodDays() {
+  const now = state.info.now;
+  return Math.max(1 / 24, (now - Math.max(state.since, state.info.first_ts || now)) / 86400);
+}
+
+function renderTiles(rows) {
+  const box = $("#tiles");
+  box.replaceChildren();
+  const tile = (label, value, sub) => {
+    const t = el("div", { class: "tile" }, box);
+    el("div", { class: "label", text: label }, t);
+    el("div", { class: "value", text: value }, t);
+    if (sub) el("div", { class: "sub", text: sub }, t);
+  };
+  const days = periodDays();
+  tile("Overflights", fmt.format(rows.length), `within ${km(radiusM())}`);
+  tile("Per day", fmt1.format(rows.length / days), days < 1 ? "so far" : "on average");
+
+  const byHour = new Array(24).fill(0);
+  for (const p of rows) byHour[new Date(p[1] * 1000).getHours()]++;
+  const top = byHour.indexOf(Math.max(...byHour));
+  tile("Busiest hour", rows.length ? `${hourLabel(top)}–${hourLabel((top + 1) % 24)}` : "–",
+       rows.length ? `${fmt.format(byHour[top])} overflights` : "");
+
+  const withAlt = rows.filter((p) => p[3] != null);
+  if (withAlt.length) {
+    const low = withAlt.reduce((a, b) => (b[3] < a[3] ? b : a));
+    tile("Lowest", ft(low[3]), `${low[4] || low[5]} · ${dateFmt.format(low[1] * 1000)}`);
+  } else {
+    tile("Lowest", "–");
+  }
+}
+
+// ---------- week heatmap ----------
+
+function weekdayCounts() {
+  // How many of each weekday the period covers, to give a per-day rate.
+  const counts = new Array(7).fill(0);
+  const start = startOfDay(Math.max(state.since, state.info.first_ts || state.info.now));
+  const end = new Date(state.info.now * 1000);
+  for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) counts[(d.getDay() + 6) % 7]++;
+  return counts;
+}
+
+function renderWeek(rows) {
+  const box = $("#week");
+  box.replaceChildren();
+  const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  for (const p of rows) {
+    const d = new Date(p[1] * 1000);
+    grid[(d.getDay() + 6) % 7][d.getHours()]++;
+  }
+  const max = Math.max(1, ...grid.flat());
+  const ndays = weekdayCounts();
+
+  const width = box.clientWidth || 800;
+  const left = 36, top = 4, bottom = 20;
+  const cw = (width - left) / 24, ch = Math.max(18, Math.min(30, cw * 0.8));
+  const svg = el("svg", { width, height: top + ch * 7 + bottom, role: "img",
+                          "aria-label": "Overflights by weekday and hour" }, box);
+  for (let r = 0; r < 7; r++) {
+    el("text", { x: left - 6, y: top + ch * r + ch / 2 + 4, "text-anchor": "end", text: DAYS[r] }, svg);
+    for (let h = 0; h < 24; h++) {
+      const v = grid[r][h];
+      const cell = el("rect", { class: "cell", x: left + cw * h + 1, y: top + ch * r + 1,
+        width: Math.max(1, cw - 2), height: ch - 2, rx: 2, fill: seqColor(v, max) }, svg);
+      const rate = ndays[r] ? ` · ${fmt1.format(v / ndays[r])} per ${DAYS[r]}` : "";
+      hoverable(cell, `${fmt.format(v)} overflights`, `${DAYS[r]} ${hourLabel(h)}–${hourLabel((h + 1) % 24)}${rate}`);
+    }
+  }
+  for (let h = 0; h < 24; h += cw < 28 ? 3 : 1) {
+    el("text", { x: left + cw * h + cw / 2, y: top + ch * 7 + 14, "text-anchor": "middle", text: hourLabel(h) }, svg);
+  }
+
+  const table = $("#week-table");
+  table.replaceChildren();
+  const head = el("tr", {}, el("thead", {}, table));
+  el("th", { text: "Day" }, head);
+  for (let h = 0; h < 24; h++) el("th", { text: String(h).padStart(2, "0") }, head);
+  const body = el("tbody", {}, table);
+  for (let r = 0; r < 7; r++) {
+    const tr = el("tr", {}, body);
+    el("td", { text: DAYS[r] }, tr);
+    for (let h = 0; h < 24; h++) el("td", { text: grid[r][h] }, tr);
+  }
+}
+
+// ---------- day x hour heatmap ----------
+
+function renderDays(rows) {
+  const box = $("#days");
+  box.replaceChildren();
+  const first = startOfDay(Math.max(state.since, state.info.first_ts || state.info.now));
+  const days = [];
+  for (const d = new Date(first); d.getTime() <= state.info.now * 1000; d.setDate(d.getDate() + 1)) {
+    days.push(new Date(d));
+  }
+  const index = new Map(days.map((d, i) => [d.toDateString(), i]));
+  const grid = days.map(() => new Array(24).fill(0));
+  for (const p of rows) {
+    const d = new Date(p[1] * 1000);
+    const i = index.get(d.toDateString());
+    if (i !== undefined) grid[i][d.getHours()]++;
+  }
+  const max = Math.max(1, ...grid.flat());
+
+  const left = 36, top = 4, bottom = 20, ch = 12;
+  const avail = (box.clientWidth || 800) - left;
+  const cw = Math.max(4, Math.min(28, avail / days.length));
+  const gap = cw > 6 ? 1 : 0.5;
+  const svg = el("svg", { width: left + cw * days.length, height: top + ch * 24 + bottom, role: "img",
+                          "aria-label": "Overflights by day and hour" }, box);
+  for (let h = 0; h < 24; h += 3) {
+    el("text", { x: left - 6, y: top + ch * h + ch / 2 + 4, "text-anchor": "end", text: hourLabel(h) }, svg);
+  }
+  days.forEach((d, i) => {
+    for (let h = 0; h < 24; h++) {
+      const v = grid[i][h];
+      const cell = el("rect", { class: "cell", x: left + cw * i + gap, y: top + ch * h + gap,
+        width: cw - 2 * gap, height: ch - 2 * gap, rx: cw > 6 ? 2 : 0, fill: seqColor(v, max) }, svg);
+      hoverable(cell, `${fmt.format(v)} overflights`, `${dateFmt.format(d)}, ${hourLabel(h)}–${hourLabel((h + 1) % 24)}`);
+    }
+  });
+  // Label the first day and each Monday, spaced so labels never collide.
+  let lastX = -Infinity;
+  days.forEach((d, i) => {
+    const x = left + cw * i;
+    if ((i === 0 || d.getDay() === 1) && x - lastX > 64 && x < left + cw * days.length - 40) {
+      el("text", { x, y: top + ch * 24 + 14, text: dateFmt.format(d).replace(/^\w+ /, "") }, svg);
+      lastX = x;
+    }
+  });
+  box.scrollLeft = box.scrollWidth;
+}
+
+// ---------- closest-approach histogram ----------
+
+function renderHist() {
+  const box = $("#hist");
+  box.replaceChildren();
+  const cap = state.info.capture_radius_m;
+  const bin = cap > 20000 ? 1000 : 500;
+  const n = Math.ceil(cap / bin);
+  const counts = new Array(n).fill(0);
+  for (const p of state.passes) counts[Math.min(n - 1, Math.floor(p[2] / bin))]++;
+  const max = Math.max(1, ...counts);
+  const r = radiusM();
+
+  const width = box.clientWidth || 800, height = 180;
+  const left = 44, top = 8, bottom = 22, ph = height - top - bottom;
+  const bw = (width - left - 20) / n;
+  const svg = el("svg", { width, height, role: "img",
+                          "aria-label": "Aircraft by distance at closest approach" }, box);
+  const step = niceStep(max);
+  for (let v = 0; v <= max; v += step) {
+    const y = top + ph - (v / max) * ph;
+    el("line", { x1: left, x2: left + bw * n, y1: y, y2: y, stroke: v ? css("--grid") : css("--axis") }, svg);
+    el("text", { x: left - 6, y: y + 4, "text-anchor": "end", text: fmt.format(v) }, svg);
+  }
+  counts.forEach((v, i) => {
+    const h = (v / max) * ph;
+    const inside = (i + 1) * bin <= r;
+    // A tall transparent hit area makes short bars easy to point at.
+    const hit = el("rect", { class: "bar", x: left + bw * i, y: top, width: bw, height: ph, fill: "transparent" }, svg);
+    if (v) {
+      el("rect", { x: left + bw * i + 1, y: top + ph - h, width: Math.max(1, bw - 2), height: h,
+                   rx: Math.min(2, bw / 4), fill: inside ? css("--series-1") : css("--other"),
+                   "pointer-events": "none" }, svg);
+    }
+    hoverable(hit, `${fmt.format(v)} aircraft`, `closest point ${fmt1.format(i * bin / 1000)}–${fmt1.format((i + 1) * bin / 1000)} km`);
+    hit.addEventListener("click", () => setRadius((i + 1) * bin / 1000));
+    hit.addEventListener("keydown", (e) => { if (e.key === "Enter") setRadius((i + 1) * bin / 1000); });
+  });
+  const tickEvery = cap > 20000 ? 5000 : 2000;
+  for (let m = 0; m <= cap; m += tickEvery) {
+    el("text", { x: left + (m / bin) * bw, y: height - 6, "text-anchor": "middle", text: `${m / 1000} km` }, svg);
+  }
+  const rx = left + (r / bin) * bw;
+  el("line", { x1: rx, x2: rx, y1: top, y2: top + ph, stroke: css("--text"), "stroke-width": 1.5,
+               "stroke-dasharray": "4 3" }, svg);
+}
+
+function niceStep(max) {
+  const raw = max / 4;
+  const mag = 10 ** Math.floor(Math.log10(raw || 1));
+  return [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) || mag;
+}
+
+// ---------- map ----------
+
+const RAMP_LIGHT = BLUE.slice(3);              // 250 -> 700
+const RAMP_DARK = BLUE.slice(0, 9).reverse();  // 500 -> 100
+function hexRGB(h) { return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); }
+
+const DensityLayer = L.Layer.extend({
+  onAdd(map) {
+    this._map = map;
+    this._canvas = L.DomUtil.create("canvas", "density");
+    this._canvas.style.pointerEvents = "none";
+    map.getPanes().overlayPane.appendChild(this._canvas);
+    map.on("moveend resize", this.redraw, this);
+    this.redraw();
+  },
+  onRemove(map) {
+    L.DomUtil.remove(this._canvas);
+    map.off("moveend resize", this.redraw, this);
+  },
+  setTracks(tracks) { this._tracks = tracks; this.redraw(); },
+  setHighlight(id) { this._highlight = id; this.redraw(); },
+
+  redraw() {
+    const map = this._map;
+    if (!map) return;
+    const size = map.getSize();
+    const w = size.x, h = size.y;
+    const canvas = this._canvas;
+    canvas.width = w; canvas.height = h;
+    canvas.style.width = w + "px"; canvas.style.height = h + "px";
+    L.DomUtil.setPosition(canvas, map.containerPointToLayerPoint([0, 0]));
+    const ctx = canvas.getContext("2d");
+    const tracks = this._tracks || new Map();
+    if (!tracks.size) return;
+
+    const scale = 256 * 2 ** map.getZoom();
+    const origin = map.getPixelBounds().min;
+    const px = (lon) => ((lon + 180) / 360) * scale - origin.x;
+    const py = (lat) => {
+      const s = Math.sin((lat * Math.PI) / 180);
+      return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * scale - origin.y;
+    };
+
+    // Count how many tracks cross each pixel.
+    const grid = new Float32Array(w * h);
+    for (const pts of tracks.values()) {
+      let last = -1, x0, y0;
+      for (let i = 0; i < pts.length; i += 2) {
+        const x1 = px(pts[i + 1]), y1 = py(pts[i]);
+        if (i > 0 && !((x0 < 0 && x1 < 0) || (y0 < 0 && y1 < 0) || (x0 >= w && x1 >= w) || (y0 >= h && y1 >= h))) {
+          const steps = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))) || 1;
+          for (let k = 0; k <= steps; k++) {
+            const x = Math.round(x0 + ((x1 - x0) * k) / steps), y = Math.round(y0 + ((y1 - y0) * k) / steps);
+            if (x < 0 || y < 0 || x >= w || y >= h) continue;
+            const idx = y * w + x;
+            if (idx !== last) { grid[idx]++; last = idx; }
+          }
+        }
+        x0 = x1; y0 = y1;
+      }
+    }
+
+    // Log scale against a high percentile, so one busy pixel does not wash out the rest.
+    const nz = [];
+    for (let i = 0; i < grid.length; i += 7) if (grid[i]) nz.push(grid[i]);
+    nz.sort((a, b) => a - b);
+    const top = Math.max(2, nz.length ? nz[Math.floor(nz.length * 0.995)] : 2);
+    const ramp = (isDark() ? RAMP_DARK : RAMP_LIGHT).map(hexRGB);
+    const img = ctx.createImageData(w, h);
+    const lt = Math.log1p(top);
+    for (let i = 0; i < grid.length; i++) {
+      const v = grid[i];
+      if (!v) continue;
+      const t = Math.min(1, Math.log1p(v) / lt);
+      const c = ramp[Math.min(ramp.length - 1, Math.floor(t * ramp.length))];
+      const o = i * 4;
+      img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
+      img.data[o + 3] = Math.round(255 * (0.45 + 0.55 * t));
+    }
+    ctx.putImageData(img, 0, 0);
+
+    const hl = this._highlight != null && tracks.get(this._highlight);
+    if (hl) {
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = css("--series-2");
+      ctx.beginPath();
+      for (let i = 0; i < hl.length; i += 2) {
+        const x = px(hl[i + 1]), y = py(hl[i]);
+        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+  },
+});
+
+let map, density, radiusCircle;
+
+function setupMap() {
+  const home = state.info.home;
+  map = L.map("map", { zoomAnimation: false, scrollWheelZoom: false });
+  map.fitBounds(L.latLng(home).toBounds(2 * state.info.capture_radius_m));
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map);
+  density = new DensityLayer().addTo(map);
+  radiusCircle = L.circle(home, { radius: radiusM(), color: css("--text-2"), weight: 1.5,
+                                  dashArray: "5 4", fill: false, interactive: false }).addTo(map);
+  L.circleMarker(home, { radius: 5, color: css("--surface"), weight: 2, fillColor: css("--text"),
+                         fillOpacity: 1, interactive: false }).addTo(map);
+  map.on("focus", () => map.scrollWheelZoom.enable());
+  map.on("blur", () => map.scrollWheelZoom.disable());
+}
+
+function renderMapLegend() {
+  const ramp = isDark() ? RAMP_DARK : RAMP_LIGHT;
+  $("#map-ramp").style.background = `linear-gradient(to right, ${ramp.join(", ")})`;
+  const n = state.tracks.size;
+  $("#map-note").textContent = n
+    ? `Paths of the ${state.trackLimitHit ? "newest " : ""}${fmt.format(n)} aircraft that came within ${km(radiusM())}. Scroll to zoom after clicking the map.`
+    : `No aircraft came within ${km(radiusM())} in this period.`;
+}
+
+// ---------- latest table ----------
+
+function renderLatest(rows) {
+  const table = $("#latest");
+  table.replaceChildren();
+  const head = el("tr", {}, el("thead", {}, table));
+  for (const h of ["Time", "Flight", "Closest", "Altitude", ""]) el("th", { text: h }, head);
+  const body = el("tbody", {}, table);
+  for (const p of rows.slice(-100).reverse()) {
+    const [id, ts, dist, alt, flight, hex] = p;
+    const tr = el("tr", {}, body);
+    const d = new Date(ts * 1000);
+    el("td", { text: `${dateFmt.format(d)} ${timeFmt.format(d)}` }, tr);
+    el("td", { text: flight || hex.toUpperCase() }, tr);
+    el("td", { text: km(dist) }, tr);
+    el("td", { text: ft(alt) }, tr);
+    const link = el("td", {}, tr);
+    if (!hex.startsWith("~")) {
+      const day = d.toISOString().slice(0, 10);
+      el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(hex)}&showTrace=${day}`,
+                target: "_blank", rel: "noopener", text: "Trace" }, link);
+    }
+    tr.addEventListener("pointerenter", () => density.setHighlight(id));
+    tr.addEventListener("pointerleave", () => density.setHighlight(null));
+  }
+  if (!rows.length) {
+    el("td", { colspan: 5, class: "empty-note", text: "No overflights in this period yet." }, el("tr", {}, body));
+  }
+}
+
+// ---------- data loading ----------
+
+function query(extra = {}) {
+  const p = new URLSearchParams({ since: state.since, ...extra });
+  if (maxAlt()) p.set("max_alt", maxAlt());
+  return p.toString();
+}
+
+async function loadPasses() {
+  const period = Number($("#period").value);
+  state.since = period ? Math.floor(Date.now() / 1000 - period * 86400) : 0;
+  const data = await getJSON("api/passes?" + query());
+  state.passes = data.rows;
+}
+
+let trackSeq = 0;
+async function loadTracks() {
+  const seq = ++trackSeq;
+  const data = await getJSON("api/tracks?" + query({ radius: Math.round(radiusM()) }));
+  if (seq !== trackSeq) return;
+  const tracks = new Map();
+  for (const [id, deltas] of data.tracks) {
+    const pts = new Float64Array(deltas.length);
+    let lat = 0, lon = 0;
+    for (let i = 0; i < deltas.length; i += 2) {
+      lat += deltas[i]; lon += deltas[i + 1];
+      pts[i] = lat / 1e5; pts[i + 1] = lon / 1e5;
+    }
+    tracks.set(id, pts);
+  }
+  state.tracks = tracks;
+  state.trackLimitHit = data.tracks.length >= data.limit;
+  density.setTracks(tracks);
+  renderMapLegend();
+}
+
+function renderAll() {
+  const rows = filtered();
+  renderTiles(rows);
+  renderWeek(rows);
+  renderDays(rows);
+  renderHist();
+  renderLatest(rows);
+  renderMapLegend();
+  radiusCircle.setRadius(radiusM());
+}
+
+async function reload() {
+  document.body.classList.add("loading");
+  try {
+    state.info = await getJSON("api/info");
+    renderStatus();
+    await loadPasses();
+    renderAll();
+    await loadTracks();
+  } catch (err) {
+    $("#status").textContent = "Cannot load data: " + err.message;
+  } finally {
+    document.body.classList.remove("loading");
+  }
+}
+
+let trackTimer;
+function setRadius(kmValue) {
+  $("#radius").value = kmValue;
+  onRadius();
+}
+function onRadius() {
+  $("#radius-out").textContent = km(radiusM());
+  saved.set("radius", $("#radius").value);
+  renderAll();
+  clearTimeout(trackTimer);
+  trackTimer = setTimeout(loadTracks, 350);
+}
+
+function renderStatus() {
+  const i = state.info;
+  const parts = [];
+  if (i.last_error) parts.push(`Receiver not reachable: ${i.last_error}`);
+  else if (i.last_poll_ok) parts.push(`Receiving · ${fmt.format(i.aircraft_now)} aircraft in range now`);
+  parts.push(`${fmt.format(i.passes)} aircraft logged within ${km(i.capture_radius_m)}`);
+  if (i.first_ts) parts.push(`since ${dateFmt.format(i.first_ts * 1000)}`);
+  parts.push(`${fmt1.format(i.db_bytes / 1e6)} MB`);
+  $("#status").textContent = parts.join(" · ");
+}
+
+async function main() {
+  state.info = await getJSON("api/info");
+  const r = $("#radius");
+  r.max = state.info.capture_radius_m / 1000;
+  r.value = saved.get("radius") || state.info.default_radius_m / 1000;
+  if (saved.get("period")) $("#period").value = saved.get("period");
+  const alt = saved.get("max_alt") ?? (state.info.default_max_alt_ft ? String(state.info.default_max_alt_ft) : "");
+  $("#max-alt").value = alt;
+  if ($("#max-alt").value !== alt) $("#max-alt").value = "";
+  $("#radius-out").textContent = km(radiusM());
+
+  setupMap();
+  r.addEventListener("input", onRadius);
+  $("#period").addEventListener("change", () => { saved.set("period", $("#period").value); reload(); });
+  $("#max-alt").addEventListener("change", () => { saved.set("max_alt", $("#max-alt").value); reload(); });
+
+  let resizeTimer;
+  addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 150); });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    renderAll();
+    density.redraw();
+  });
+
+  await reload();
+  setInterval(async () => {
+    try { state.info = await getJSON("api/info"); renderStatus(); } catch { /* shown on next reload */ }
+  }, 30000);
+}
+
+main().catch((err) => { $("#status").textContent = "Cannot start: " + err.message; });

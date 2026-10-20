@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overflights</title>
+<link rel="stylesheet" href="static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>Overflights</h1>
+    <p id="status" class="muted">Connecting…</p>
+  </header>
+
+  <section class="filters" aria-label="Filters">
+    <label>Period
+      <select id="period">
+        <option value="1">Last 24 hours</option>
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="365">Last 365 days</option>
+        <option value="0">All</option>
+      </select>
+    </label>
+    <label class="radius">Radius <output id="radius-out"></output>
+      <input id="radius" type="range" min="0.5" step="0.5">
+    </label>
+    <label>Altitude at closest point
+      <select id="max-alt">
+        <option value="">Any</option>
+        <option value="2000">Below 2,000 ft</option>
+        <option value="3000">Below 3,000 ft</option>
+        <option value="5000">Below 5,000 ft</option>
+        <option value="7500">Below 7,500 ft</option>
+        <option value="10000">Below 10,000 ft</option>
+        <option value="15000">Below 15,000 ft</option>
+        <option value="20000">Below 20,000 ft</option>
+        <option value="30000">Below 30,000 ft</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="tiles" id="tiles" aria-live="polite"></section>
+
+  <section class="card loadable">
+    <h2>When they fly over</h2>
+    <p class="muted">Overflights in each hour of the week, in local time.</p>
+    <div id="week" class="chart"></div>
+    <details>
+      <summary>Show as table</summary>
+      <div class="table-wrap"><table id="week-table"></table></div>
+    </details>
+  </section>
+
+  <section class="card loadable">
+    <h2>Every day</h2>
+    <p class="muted">Each column is one day, each row one hour.</p>
+    <div id="days" class="chart scroll-x"></div>
+  </section>
+
+  <section class="card loadable">
+    <h2>How close they come</h2>
+    <p class="muted">All aircraft in the period by distance at their closest point to the house.
+      Bars inside the radius are blue. Click a bar to set the radius.</p>
+    <div id="hist" class="chart"></div>
+  </section>
+
+  <section class="card loadable">
+    <h2>Where they fly</h2>
+    <p class="muted" id="map-note">Paths of the aircraft that came within the radius.</p>
+    <div id="map"></div>
+    <div class="map-legend">
+      <span>Fewer paths</span><span id="map-ramp" class="ramp"></span><span>More paths</span>
+    </div>
+  </section>
+
+  <section class="card loadable">
+    <h2>Latest overflights</h2>
+    <p class="muted">Point at a row to show its path on the map.</p>
+    <div class="table-wrap"><table id="latest"></table></div>
+  </section>
+</main>
+<div id="tooltip" role="status" hidden></div>
+<script src="static/vendor/leaflet/leaflet.js"></script>
+<script src="static/app.js"></script>
+</body>
+</html>
