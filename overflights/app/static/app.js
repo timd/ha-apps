@@ -302,8 +302,10 @@ function niceStep(max) {
 
 // ---------- map ----------
 
-const RAMP_LIGHT = BLUE.slice(3);              // 250 -> 700
+const RAMP_LIGHT = BLUE.slice(6);              // 400 -> 700
 const RAMP_DARK = BLUE.slice(0, 9).reverse();  // 500 -> 100
+// Each track is drawn 3 px wide: the pixel and its eight neighbours.
+const BRUSH = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [dx, dy]));
 function hexRGB(h) { return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); }
 
 const DensityLayer = L.Layer.extend({
@@ -343,19 +345,26 @@ const DensityLayer = L.Layer.extend({
       return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * scale - origin.y;
     };
 
-    // Count how many tracks cross each pixel.
+    // Count how many tracks cross each pixel. `seen` holds the last track
+    // that touched a pixel, so a track counts once however often it crosses.
     const grid = new Float32Array(w * h);
+    const seen = new Int32Array(w * h);
+    let n = 0;
     for (const pts of tracks.values()) {
-      let last = -1, x0, y0;
+      n++;
+      let x0, y0;
       for (let i = 0; i < pts.length; i += 2) {
         const x1 = px(pts[i + 1]), y1 = py(pts[i]);
         if (i > 0 && !((x0 < 0 && x1 < 0) || (y0 < 0 && y1 < 0) || (x0 >= w && x1 >= w) || (y0 >= h && y1 >= h))) {
           const steps = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))) || 1;
           for (let k = 0; k <= steps; k++) {
-            const x = Math.round(x0 + ((x1 - x0) * k) / steps), y = Math.round(y0 + ((y1 - y0) * k) / steps);
-            if (x < 0 || y < 0 || x >= w || y >= h) continue;
-            const idx = y * w + x;
-            if (idx !== last) { grid[idx]++; last = idx; }
+            const cx = Math.round(x0 + ((x1 - x0) * k) / steps), cy = Math.round(y0 + ((y1 - y0) * k) / steps);
+            for (const [dx, dy] of BRUSH) {
+              const x = cx + dx, y = cy + dy;
+              if (x < 0 || y < 0 || x >= w || y >= h) continue;
+              const idx = y * w + x;
+              if (seen[idx] !== n) { seen[idx] = n; grid[idx]++; }
+            }
           }
         }
         x0 = x1; y0 = y1;
@@ -377,13 +386,13 @@ const DensityLayer = L.Layer.extend({
       const c = ramp[Math.min(ramp.length - 1, Math.floor(t * ramp.length))];
       const o = i * 4;
       img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
-      img.data[o + 3] = Math.round(255 * (0.45 + 0.55 * t));
+      img.data[o + 3] = Math.round(255 * (0.75 + 0.25 * t));
     }
     ctx.putImageData(img, 0, 0);
 
     const hl = this._highlight != null && tracks.get(this._highlight);
     if (hl) {
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 4;
       ctx.lineJoin = "round";
       ctx.strokeStyle = css("--series-2");
       ctx.beginPath();

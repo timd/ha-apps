@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- The map draws paths 3 px wide, and darker in the light theme.
+- The path that you point at in the table is drawn 4 px wide.
+
 ## 0.4.0
 
 - First public release. Prebuilt images for amd64 and aarch64.
