@@ -331,6 +331,7 @@ const DensityLayer = L.Layer.extend({
   },
   setTracks(tracks) { this._tracks = tracks; this.redraw(); },  // id -> {kind, pts}
   setHighlight(id) { this._highlight = id; this.redraw(); },
+  setHidden(kinds) { this._hidden = kinds; this.redraw(); },  // a Set of kind ids
 
   redraw() {
     const map = this._map;
@@ -360,7 +361,9 @@ const DensityLayer = L.Layer.extend({
     const grid = new Float32Array(w * h);
     const seen = new Int32Array(w * h);
     let n = 0;
+    const hidden = this._hidden || new Set();
     for (const { kind, pts } of tracks.values()) {
+      if (hidden.has(kind)) continue;
       n++;
       const kgrid = grids[KIND[kind].index];
       let x0, y0;
@@ -421,6 +424,15 @@ const DensityLayer = L.Layer.extend({
 });
 
 let map, density, radiusCircle;
+// Classes that the map does not draw. The viewer toggles them in the legend.
+const hiddenKinds = new Set((saved.get("hidden") || "").split(",").filter((k) => k in KIND));
+
+function toggleKind(kind) {
+  if (hiddenKinds.has(kind)) hiddenKinds.delete(kind); else hiddenKinds.add(kind);
+  saved.set("hidden", [...hiddenKinds].join(","));
+  density.setHidden(hiddenKinds);
+  renderMapLegend();
+}
 
 function setupMap() {
   const home = state.info.home;
@@ -431,6 +443,7 @@ function setupMap() {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   density = new DensityLayer().addTo(map);
+  density.setHidden(hiddenKinds);
   radiusCircle = L.circle(home, { radius: radiusM(), color: css("--text-2"), weight: 1.5,
                                   dashArray: "5 4", fill: false, interactive: false }).addTo(map);
   L.circleMarker(home, { radius: 5, color: css("--surface"), weight: 2, fillColor: css("--text"),
@@ -446,14 +459,20 @@ function renderMapLegend() {
   box.replaceChildren();
   for (const k of KINDS) {
     if (kindFilter() && kindFilter() !== k.id) continue;
-    const item = el("span", { class: "key" }, box);
+    const shown = !hiddenKinds.has(k.id);
+    const item = el("button", { type: "button", class: "key", "aria-pressed": String(shown),
+                                title: `${shown ? "Hide" : "Show"} ${k.plural.toLowerCase()} on the map` }, box);
     el("span", { class: "swatch", style: `background: ${kindColor(k.id)}` }, item);
     item.append(`${k.plural} ${fmt.format(counts[k.id])}`);
+    item.addEventListener("click", () => toggleKind(k.id));
   }
-  el("span", { class: "muted-note", text: "Stronger colour: more aircraft" }, box);
+  el("span", { class: "muted-note", text: "Click a class to show or hide it. Stronger colour: more aircraft." }, box);
   const n = state.tracks.size;
+  let drawn = 0;
+  for (const t of state.tracks.values()) if (!hiddenKinds.has(t.kind)) drawn++;
+  const hiddenNote = drawn < n ? ` The map shows ${fmt.format(drawn)} of them.` : "";
   $("#map-note").textContent = n
-    ? `Paths of the ${state.trackLimitHit ? "newest " : ""}${fmt.format(n)} aircraft that came within ${km(radiusM())}. Scroll to zoom after clicking the map.`
+    ? `Paths of the ${state.trackLimitHit ? "newest " : ""}${fmt.format(n)} aircraft that came within ${km(radiusM())}.${hiddenNote} Scroll to zoom after clicking the map.`
     : `No aircraft came within ${km(radiusM())} in this period.`;
 }
 

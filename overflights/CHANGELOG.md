@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+
+- The map legend's classes are buttons: click one to hide or show its paths
+  on the map. The browser remembers the choice.
+
 ## 0.5.0
 
 - Each pass is an arrival, a departure, a transit, or unclassified, from its

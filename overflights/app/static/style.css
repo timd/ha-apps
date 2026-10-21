@@ -107,6 +107,13 @@ svg .bar:hover, svg .bar:focus { opacity: 0.75; outline: none; cursor: pointer; 
 @media (max-width: 600px) { #map { height: 380px; } }
 .map-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 8px; color: var(--text-2); font-size: 12px; }
 .map-legend .muted-note { color: var(--muted); }
+.map-legend .key {
+  font: inherit; color: var(--text); background: var(--surface); cursor: pointer;
+  border: 1px solid var(--axis); border-radius: 999px; padding: 3px 10px;
+}
+.map-legend .key:hover { border-color: var(--text-2); }
+.map-legend .key[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; border-style: dashed; }
+.map-legend .key[aria-pressed="false"] .swatch { opacity: 0.25; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .leaflet-container { font: inherit; }
 /* A grey base map, so the paths carry the colour. */
