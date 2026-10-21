@@ -498,7 +498,10 @@ function renderLatest(rows) {
     const link = el("td", {}, tr);
     if (!hex.startsWith("~") && !hex.startsWith("zz")) {
       const day = d.toISOString().slice(0, 10);
-      el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(hex)}&showTrace=${day}`,
+      // Centre the map on the house, or it opens elsewhere until the trace loads.
+      const [lat, lon] = state.info.home;
+      el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(hex)}&showTrace=${day}` +
+                      `&lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&zoom=9`,
                 target: "_blank", rel: "noopener", text: "Trace" }, link);
     }
     tr.addEventListener("pointerenter", () => density.setHighlight(id));

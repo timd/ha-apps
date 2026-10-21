@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- The Trace link opens the ADS-B Exchange map centred on the house, so the
+  trace is in view as soon as it loads.
+
 ## 0.5.1
 
 - The map legend's classes are buttons: click one to hide or show its paths
