@@ -45,7 +45,9 @@ A receiver some distance away cannot see aircraft low over the airport. Near
 the ground, arrivals and departures disappear several kilometres from the
 runway. If you list the runways in `runways`, the map joins each arrival's
 last position, and each departure's first, to a runway end with a dashed line.
-The App picks the end whose extended centreline lies nearest to the aircraft.
+The App joins only an aircraft within 25° of a runway's extended centreline,
+and picks the nearest centreline. An aircraft that the receiver lost on a
+downwind or base leg still has a turn to fly, so its path stays open.
 The dashed line is an estimate, not a received path. Without runways, the
 line goes to the airport position.
 

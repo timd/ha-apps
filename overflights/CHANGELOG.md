@@ -7,7 +7,8 @@
   on the map toward the airport. Passes that never come within the capture
   radius of the house are deleted.
 - The option `runways`: the map joins each arrival and departure to a runway
-  end with a dashed line, across the part the receiver cannot see.
+  end with a dashed line, across the part the receiver cannot see. It joins
+  only aircraft within 25° of a runway's extended centreline.
 - The map opens with the airport in view.
 
 ## 0.5.2

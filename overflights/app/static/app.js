@@ -316,6 +316,10 @@ function niceStep(max) {
 // track ends, and a departure's starts, some kilometres from the runway.
 // The map joins that end to a runway end with a dashed line.
 const LINK_MAX_M = 25000;
+// Join only an aircraft within this angle of a runway's extended centreline.
+// One that the receiver lost on a downwind or base leg has a turn still to
+// fly, and a straight line would cross country it never flew over.
+const LINK_MAX_ANGLE = Math.tan((25 * Math.PI) / 180);
 const DASH = [6, 5];  // px on, px off
 
 // Return the [lat, lon] that a track's open end joins, or null.
@@ -329,23 +333,22 @@ function runwayLink(kind, pts) {
   const xy = (q) => [(q[1] - p[1]) * kx, (q[0] - p[0]) * ky];  // metres from p
   // Without runways, join the airport point.
   if (!runways.length) return Math.hypot(...xy(airport)) <= LINK_MAX_M ? airport : null;
-  // The aircraft flies along a runway's extended centreline, outside one of
-  // its ends. Pick the end with the aircraft beyond it and nearest the centreline.
-  let best = null, bestCross = Infinity, nearest = null, nearestDist = Infinity;
+  // On final approach or the initial climb, the aircraft is on a runway's
+  // extended centreline, outside one of its ends. Pick the end with the
+  // aircraft beyond it and nearest the centreline.
+  let best = null, bestCross = Infinity;
   for (const [lat1, lon1, lat2, lon2] of runways) {
     for (const [end, other] of [[[lat1, lon1], [lat2, lon2]], [[lat2, lon2], [lat1, lon1]]]) {
       const [ex, ey] = xy(end), [ox, oy] = xy(other);
       const len = Math.hypot(ex - ox, ey - oy) || 1;
       const ux = (ex - ox) / len, uy = (ey - oy) / len;  // outward from this end
       const vx = -ex, vy = -ey;                            // from the end to the aircraft
-      const dist = Math.hypot(vx, vy);
-      if (dist > LINK_MAX_M) continue;
-      if (dist < nearestDist) { nearest = end; nearestDist = dist; }
-      const cross = Math.abs(vx * uy - vy * ux);
-      if (vx * ux + vy * uy > 0 && cross < bestCross) { best = end; bestCross = cross; }
+      if (Math.hypot(vx, vy) > LINK_MAX_M) continue;
+      const along = vx * ux + vy * uy, cross = Math.abs(vx * uy - vy * ux);
+      if (along > 0 && cross <= along * LINK_MAX_ANGLE && cross < bestCross) { best = end; bestCross = cross; }
     }
   }
-  return best || nearest;
+  return best;
 }
 
 // Each track is drawn 3 px wide: the pixel and its eight neighbours.
