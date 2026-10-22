@@ -33,6 +33,31 @@ On the map, click a class in the legend to hide or show its paths. The
 browser remembers the choice. The Type filter above the charts limits the
 whole page to one class.
 
+## Paths to the airport
+
+With an airport set, the App also stores positions within
+`airport_radius_km` (25 km) of the airport, for aircraft that also come within
+the capture radius of the house. Arrivals and departures then continue on the
+map toward the airport, until the receiver loses sight of them. An aircraft
+that only crosses the airport area is not a pass, and the App deletes it.
+
+A receiver some distance away cannot see aircraft low over the airport. Near
+the ground, arrivals and departures disappear several kilometres from the
+runway. If you list the runways in `runways`, the map joins each arrival's
+last position, and each departure's first, to a runway end with a dashed line.
+The App picks the end whose extended centreline lies nearest to the aircraft.
+The dashed line is an estimate, not a received path. Without runways, the
+line goes to the airport position.
+
+Give each runway as its two ends, `lat,lon,lat,lon`. For Berlin
+Brandenburg:
+
+```yaml
+runways:
+  - 52.37743,13.52611,52.36768,13.48500
+  - 52.35843,13.52317,52.34543,13.46843
+```
+
 The App classifies passes when the page asks for them, so a change to these
 options also applies to the passes that are already stored.
 
@@ -46,7 +71,9 @@ is only a view filter, so you can change it at any time without losing data.
 | `receiver_url` | The receiver's data folder, which holds `aircraft.json` and `receiver.json`. |
 | `latitude`, `longitude` | The house position. If empty, the App reads it from `receiver.json`. |
 | `airport_latitude`, `airport_longitude` | Optional. The main airport near the house, used to check arrivals and departures. |
-| `capture_radius_km` | Positions further away are not stored. |
+| `airport_radius_km` | Positions within this distance of the airport are stored too. 0 turns this off. |
+| `runways` | Optional. Each runway's two ends as `lat,lon,lat,lon`, for the dashed lines on the map. |
+| `capture_radius_km` | Positions further away are not stored, except near the airport. Only aircraft that come this close are passes. |
 | `poll_seconds` | How often the App reads the receiver. |
 | `retention_days` | Passes older than this are deleted. |
 | `default_radius_km` | What counts as overhead: the page's radius until a viewer changes it, and the radius for the sensors. |

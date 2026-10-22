@@ -15,7 +15,7 @@ import demo
 import store
 from classify import COLUMNS, JOINS, KINDS, Classifier
 from sensors import Sensors
-from collector import Collector
+from collector import PASS_GAP_S, Collector
 
 log = logging.getLogger("overflights")
 
@@ -40,15 +40,18 @@ async def receiver_position(base_url):
                 await asyncio.sleep(30)
 
 
-def query_args(request):
+def query_args(request, capture_m):
+    """Passes that match the page's filters. A pass that only crossed the
+    airport area, and never came within `capture_m` of the house, never matches."""
     q = request.query
     args = {
+        "capture": capture_m,
         "since": int(q.get("since", 0)),
         "until": int(q.get("until", 2**31)),
         "max_alt": int(q["max_alt"]) if q.get("max_alt") else None,
         "radius": int(q["radius"]) if q.get("radius") else None,
     }
-    where = ["p.min_ts >= :since", "p.min_ts < :until"]
+    where = ["p.min_ts >= :since", "p.min_ts < :until", "p.min_dist_m <= :capture"]
     if args["max_alt"] is not None:
         where.append("p.min_alt_ft <= :max_alt")
     if args["radius"] is not None:
@@ -105,6 +108,21 @@ def read_tracks(db_path, classify, where, args, kinds):
         db.close()
 
 
+def parse_runways(entries):
+    """Read each runway as "lat,lon,lat,lon", the two ends. Skip bad entries."""
+    runways = []
+    for entry in entries or []:
+        try:
+            ends = [float(v) for v in entry.split(",")]
+        except ValueError:
+            ends = []
+        if len(ends) == 4:
+            runways.append(ends)
+        else:
+            log.warning("Ignoring runway %r: give it as lat,lon,lat,lon", entry)
+    return runways
+
+
 def make_app(state):
     routes = web.RouteTableDef()
 
@@ -122,7 +140,8 @@ def make_app(state):
     async def info(_request):
         db = store.connect(state["db_path"])
         try:
-            count, first = db.execute("SELECT count(*), min(start_ts) FROM passes").fetchone()
+            count, first = db.execute("SELECT count(*), min(start_ts) FROM passes WHERE min_dist_m <= ?",
+                                      (state["capture_m"],)).fetchone()
             demo_count = demo.count(db)
         finally:
             db.close()
@@ -134,6 +153,8 @@ def make_app(state):
             "default_radius_m": round(opts["default_radius_km"] * 1000),
             "default_max_alt_ft": opts.get("default_max_altitude_ft") or None,
             "airport": state["airport"],
+            "airport_radius_m": state["airport_m"] if state["airport"] else None,
+            "runways": state["runways"],
             "passes": count,
             "demo_passes": demo_count,
             "first_ts": first,
@@ -147,14 +168,14 @@ def make_app(state):
     @routes.get("/api/passes")
     async def passes(request):
         rows = await asyncio.to_thread(read_passes, state["db_path"], state["classify"],
-                                       *query_args(request))
+                                       *query_args(request, state["capture_m"]))
         return web.json_response({"fields": ["id", "ts", "dist_m", "alt_ft", "flight", "hex", "kind"],
                                   "rows": rows})
 
     @routes.get("/api/tracks")
     async def tracks(request):
         rows = await asyncio.to_thread(read_tracks, state["db_path"], state["classify"],
-                                       *query_args(request))
+                                       *query_args(request, state["capture_m"]))
         return web.json_response({"limit": MAX_TRACKS, "tracks": rows})
 
     @routes.get("/api/health")
@@ -168,11 +189,14 @@ def make_app(state):
     return app
 
 
-async def prune_loop(db, days):
+async def prune_loop(db, days, capture_m):
     while True:
         n = store.prune(db, int(time.time()) - days * 86400)
         if n:
             log.info("Deleted %d passes older than %d days", n, days)
+        n = store.prune_outside(db, capture_m, int(time.time()) - 2 * PASS_GAP_S)
+        if n:
+            log.info("Deleted %d passes that only crossed the airport area", n)
         await asyncio.sleep(3600)
 
 
@@ -197,14 +221,18 @@ async def main():
     log.info("Home %.5f,%.5f, capture radius %.1f km, time zone %s", lat, lon,
              opts["capture_radius_km"], time.strftime("%Z"))
 
-    collector = Collector(db, home, base + "/aircraft.json",
-                          opts["capture_radius_km"] * 1000, opts["poll_seconds"])
+    capture_m = opts["capture_radius_km"] * 1000
     airport = None
     if opts.get("airport_latitude") is not None and opts.get("airport_longitude") is not None:
         airport = [opts["airport_latitude"], opts["airport_longitude"]]
         log.info("Arrivals and departures are checked against the airport at %.4f,%.4f", *airport)
+    airport_m = opts.get("airport_radius_km", 25) * 1000
+    runways = parse_runways(opts.get("runways"))
+    collector = Collector(db, home, base + "/aircraft.json", capture_m, opts["poll_seconds"],
+                          airport, airport_m)
     state = {"db_path": db_path, "home": home, "collector": collector, "options": opts,
-             "airport": airport, "classify": Classifier(home, airport)}
+             "capture_m": capture_m, "airport": airport, "airport_m": airport_m,
+             "runways": runways, "classify": Classifier(home, airport)}
 
     runner = web.AppRunner(make_app(state), access_log=None)
     await runner.setup()
@@ -215,9 +243,9 @@ async def main():
     await demo.apply(opts.get("demo_data", False), demo_db, db_path, home, base,
                      opts["capture_radius_km"] * 1000)
     demo_db.close()
-    sensors = Sensors(db_path, collector, state["classify"], opts["default_radius_km"] * 1000,
+    sensors = Sensors(db_path, collector, state["classify"], min(opts["default_radius_km"] * 1000, capture_m),
                       opts.get("default_max_altitude_ft"))
-    await asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"]), sensors.run())
+    await asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"], capture_m), sensors.run())
 
 
 if __name__ == "__main__":

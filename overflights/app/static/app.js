@@ -312,6 +312,42 @@ function niceStep(max) {
 
 // ---------- map ----------
 
+// The receiver cannot see aircraft low over the airport, so an arrival's
+// track ends, and a departure's starts, some kilometres from the runway.
+// The map joins that end to a runway end with a dashed line.
+const LINK_MAX_M = 25000;
+const DASH = [6, 5];  // px on, px off
+
+// Return the [lat, lon] that a track's open end joins, or null.
+function runwayLink(kind, pts) {
+  if ((kind !== "arrival" && kind !== "departure") || pts.length < 2) return null;
+  const { airport, runways } = state.info;
+  if (!airport) return null;
+  const i = kind === "arrival" ? pts.length - 2 : 0;
+  const p = [pts[i], pts[i + 1]];
+  const kx = 111195 * Math.cos((p[0] * Math.PI) / 180), ky = 111195;
+  const xy = (q) => [(q[1] - p[1]) * kx, (q[0] - p[0]) * ky];  // metres from p
+  // Without runways, join the airport point.
+  if (!runways.length) return Math.hypot(...xy(airport)) <= LINK_MAX_M ? airport : null;
+  // The aircraft flies along a runway's extended centreline, outside one of
+  // its ends. Pick the end with the aircraft beyond it and nearest the centreline.
+  let best = null, bestCross = Infinity, nearest = null, nearestDist = Infinity;
+  for (const [lat1, lon1, lat2, lon2] of runways) {
+    for (const [end, other] of [[[lat1, lon1], [lat2, lon2]], [[lat2, lon2], [lat1, lon1]]]) {
+      const [ex, ey] = xy(end), [ox, oy] = xy(other);
+      const len = Math.hypot(ex - ox, ey - oy) || 1;
+      const ux = (ex - ox) / len, uy = (ey - oy) / len;  // outward from this end
+      const vx = -ex, vy = -ey;                            // from the end to the aircraft
+      const dist = Math.hypot(vx, vy);
+      if (dist > LINK_MAX_M) continue;
+      if (dist < nearestDist) { nearest = end; nearestDist = dist; }
+      const cross = Math.abs(vx * uy - vy * ux);
+      if (vx * ux + vy * uy > 0 && cross < bestCross) { best = end; bestCross = cross; }
+    }
+  }
+  return best || nearest;
+}
+
 // Each track is drawn 3 px wide: the pixel and its eight neighbours.
 const BRUSH = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [dx, dy]));
 function hexRGB(h) { return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); }
@@ -329,7 +365,7 @@ const DensityLayer = L.Layer.extend({
     L.DomUtil.remove(this._canvas);
     map.off("moveend resize", this.redraw, this);
   },
-  setTracks(tracks) { this._tracks = tracks; this.redraw(); },  // id -> {kind, pts}
+  setTracks(tracks) { this._tracks = tracks; this.redraw(); },  // id -> {kind, pts, link}
   setHighlight(id) { this._highlight = id; this.redraw(); },
   setHidden(kinds) { this._hidden = kinds; this.redraw(); },  // a Set of kind ids
 
@@ -360,28 +396,37 @@ const DensityLayer = L.Layer.extend({
     const grids = KINDS.map(() => new Float32Array(w * h));
     const grid = new Float32Array(w * h);
     const seen = new Int32Array(w * h);
-    let n = 0;
+    let n = 0, kgrid;
+    // Mark the pixels of one segment. A dashed segment counts its dashes from
+    // (x0, y0), so the dashes of many tracks line up at the runway end.
+    const segment = (x0, y0, x1, y1, dashed) => {
+      if ((x0 < 0 && x1 < 0) || (y0 < 0 && y1 < 0) || (x0 >= w && x1 >= w) || (y0 >= h && y1 >= h)) return;
+      const steps = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))) || 1;
+      for (let k = 0; k <= steps; k++) {
+        if (dashed && k % (DASH[0] + DASH[1]) >= DASH[0]) continue;
+        const cx = Math.round(x0 + ((x1 - x0) * k) / steps), cy = Math.round(y0 + ((y1 - y0) * k) / steps);
+        for (const [dx, dy] of BRUSH) {
+          const x = cx + dx, y = cy + dy;
+          if (x < 0 || y < 0 || x >= w || y >= h) continue;
+          const idx = y * w + x;
+          if (seen[idx] !== n) { seen[idx] = n; grid[idx]++; kgrid[idx]++; }
+        }
+      }
+    };
     const hidden = this._hidden || new Set();
-    for (const { kind, pts } of tracks.values()) {
+    for (const { kind, pts, link } of tracks.values()) {
       if (hidden.has(kind)) continue;
       n++;
-      const kgrid = grids[KIND[kind].index];
+      kgrid = grids[KIND[kind].index];
       let x0, y0;
       for (let i = 0; i < pts.length; i += 2) {
         const x1 = px(pts[i + 1]), y1 = py(pts[i]);
-        if (i > 0 && !((x0 < 0 && x1 < 0) || (y0 < 0 && y1 < 0) || (x0 >= w && x1 >= w) || (y0 >= h && y1 >= h))) {
-          const steps = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))) || 1;
-          for (let k = 0; k <= steps; k++) {
-            const cx = Math.round(x0 + ((x1 - x0) * k) / steps), cy = Math.round(y0 + ((y1 - y0) * k) / steps);
-            for (const [dx, dy] of BRUSH) {
-              const x = cx + dx, y = cy + dy;
-              if (x < 0 || y < 0 || x >= w || y >= h) continue;
-              const idx = y * w + x;
-              if (seen[idx] !== n) { seen[idx] = n; grid[idx]++; kgrid[idx]++; }
-            }
-          }
-        }
+        if (i > 0) segment(x0, y0, x1, y1, false);
         x0 = x1; y0 = y1;
+      }
+      if (link) {
+        const i = kind === "arrival" ? pts.length - 2 : 0;
+        segment(px(link[1]), py(link[0]), px(pts[i + 1]), py(pts[i]), true);
       }
     }
 
@@ -408,8 +453,9 @@ const DensityLayer = L.Layer.extend({
     }
     ctx.putImageData(img, 0, 0);
 
-    const hl = this._highlight != null && tracks.get(this._highlight)?.pts;
-    if (hl) {
+    const t = this._highlight != null && tracks.get(this._highlight);
+    if (t) {
+      const hl = t.pts;
       ctx.lineWidth = 4;
       ctx.lineJoin = "round";
       ctx.strokeStyle = css("--text");
@@ -419,6 +465,15 @@ const DensityLayer = L.Layer.extend({
         if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
       }
       ctx.stroke();
+      if (t.link) {
+        const i = t.kind === "arrival" ? hl.length - 2 : 0;
+        ctx.setLineDash(DASH);
+        ctx.beginPath();
+        ctx.moveTo(px(t.link[1]), py(t.link[0]));
+        ctx.lineTo(px(hl[i + 1]), py(hl[i]));
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
   },
 });
@@ -437,7 +492,10 @@ function toggleKind(kind) {
 function setupMap() {
   const home = state.info.home;
   map = L.map("map", { zoomAnimation: false, scrollWheelZoom: false });
-  map.fitBounds(L.latLng(home).toBounds(2 * state.info.capture_radius_m));
+  const bounds = L.latLng(home).toBounds(2 * state.info.capture_radius_m);
+  // Show the airport too, where arrivals and departures end.
+  if (state.info.airport) bounds.extend(L.latLng(state.info.airport).toBounds(8000));
+  map.fitBounds(bounds);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -466,7 +524,10 @@ function renderMapLegend() {
     item.append(`${k.plural} ${fmt.format(counts[k.id])}`);
     item.addEventListener("click", () => toggleKind(k.id));
   }
-  el("span", { class: "muted-note", text: "Click a class to show or hide it. Stronger colour: more aircraft." }, box);
+  let linked = false;
+  for (const t of state.tracks.values()) if (t.link && !hiddenKinds.has(t.kind)) { linked = true; break; }
+  el("span", { class: "muted-note", text: "Click a class to show or hide it. Stronger colour: more aircraft." +
+    (linked ? " Dashed: the path to or from the runway, below the receiver's view and estimated." : "") }, box);
   const n = state.tracks.size;
   let drawn = 0;
   for (const t of state.tracks.values()) if (!hiddenKinds.has(t.kind)) drawn++;
@@ -541,7 +602,7 @@ async function loadTracks() {
       lat += deltas[i]; lon += deltas[i + 1];
       pts[i] = lat / 1e5; pts[i + 1] = lon / 1e5;
     }
-    tracks.set(id, { kind, pts });
+    tracks.set(id, { kind, pts, link: runwayLink(kind, pts) });
   }
   state.tracks = tracks;
   state.trackLimitHit = data.tracks.length >= data.limit;

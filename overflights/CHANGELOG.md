@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0
+
+- With an airport set, the App also stores positions within
+  `airport_radius_km` (default 25 km) of it. Arrivals and departures continue
+  on the map toward the airport. Passes that never come within the capture
+  radius of the house are deleted.
+- The option `runways`: the map joins each arrival and departure to a runway
+  end with a dashed line, across the part the receiver cannot see.
+- The map opens with the airport in view.
+
 ## 0.5.2
 
 - The Trace link opens the ADS-B Exchange map centred on the house, so the

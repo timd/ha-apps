@@ -76,6 +76,19 @@ def set_meta(db, key, value):
     db.commit()
 
 
+def prune_outside(db, capture_m, before_ts):
+    """Delete closed passes that never came within `capture_m` of the house.
+
+    Positions near the airport are kept, so an aircraft can make a pass that
+    only crosses the airport area. Such a pass is not an overflight.
+    """
+    ids = "SELECT id FROM passes WHERE end_ts < ? AND min_dist_m > ?"
+    db.execute(f"DELETE FROM positions WHERE pass_id IN ({ids})", (before_ts, capture_m))
+    n = db.execute(f"DELETE FROM passes WHERE id IN ({ids})", (before_ts, capture_m)).rowcount
+    db.commit()
+    return n
+
+
 def prune(db, before_ts):
     """Delete passes that ended before `before_ts`, with their positions."""
     db.execute(

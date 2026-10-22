@@ -1,7 +1,7 @@
 # Logs aircraft that pass near the house from an ADS-B receiver
 # (PiAware/SkyAware, tar1090, readsb) and charts when and where they fly.
 name: Overflights
-version: "0.5.2"
+version: "0.6.0"
 slug: overflights
 description: Logs aircraft that pass over the house and charts when and where they fly.
 url: https://github.com/timd/ha-apps/tree/main/overflights
@@ -27,12 +27,17 @@ options:
   default_radius_km: 5
   default_max_altitude_ft: 0
   demo_data: false
+  airport_radius_km: 25
+  runways: []
 schema:
   receiver_url: url
   latitude: float?
   longitude: float?
   airport_latitude: float?
   airport_longitude: float?
+  airport_radius_km: float(0,100)
+  runways:
+    - str
   capture_radius_km: float(1,100)
   poll_seconds: int(1,60)
   retention_days: int(7,3650)

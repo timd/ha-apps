@@ -40,11 +40,15 @@ class PassState:
 
 
 class Collector:
-    def __init__(self, db, home, source_url, capture_m, poll_s):
+    def __init__(self, db, home, source_url, capture_m, poll_s, airport=None, airport_m=0):
+        """`airport` is (lat, lon) or None. Positions within `airport_m` of it
+        are kept too, so arrivals and departures reach the airport."""
         self.db = db
         self.home = home
         self.source_url = source_url
         self.capture_m = capture_m
+        self.airport = home.xy(*airport) if airport and airport_m else None
+        self.airport_m = airport_m
         self.poll_s = poll_s
         self.open = {}
         self.last_ok = None
@@ -87,7 +91,7 @@ class Collector:
                 continue
             x, y = self.home.xy(lat, lon)
             dist = math.hypot(x, y)
-            if dist > self.capture_m:
+            if dist > self.capture_m and not self._near_airport(x, y):
                 continue
 
             hex_ = ac["hex"]
@@ -142,6 +146,9 @@ class Collector:
         for hex_ in [h for h, st in self.open.items() if now - st.last_ts > PASS_GAP_S]:
             del self.open[hex_]
         self.aircraft_seen = len(data.get("aircraft", []))
+
+    def _near_airport(self, x, y):
+        return self.airport is not None and math.dist((x, y), self.airport) <= self.airport_m
 
     async def run(self):
         timeout = aiohttp.ClientTimeout(total=10)

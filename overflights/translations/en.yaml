@@ -18,9 +18,21 @@ configuration:
   airport_longitude:
     name: Airport longitude
     description: Optional. The main airport near the house.
+  airport_radius_km:
+    name: Airport radius (km)
+    description: >-
+      Positions within this distance of the airport are stored too, so arrivals and
+      departures reach the airport on the map. 0 turns this off.
+  runways:
+    name: Runways
+    description: >-
+      Optional. Each runway as "lat,lon,lat,lon", its two ends. The map draws a dashed
+      line from each arrival and departure to a runway end.
   capture_radius_km:
     name: Capture radius (km)
-    description: Positions further from the house than this are not stored.
+    description: >-
+      Positions further from the house than this are not stored, except near the
+      airport. Only aircraft that come this close count as passes.
   poll_seconds:
     name: Poll interval (seconds)
     description: How often the App reads the receiver.
