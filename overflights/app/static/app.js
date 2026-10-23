@@ -11,6 +11,9 @@ const KINDS = [
   { id: "unknown", label: "Unclassified", plural: "Unclassified" },
 ];
 const KIND = Object.fromEntries(KINDS.map((k, i) => [k.id, { ...k, index: i }]));
+// The map draws classes in this order, each on top of the last, so the
+// fewer arrivals and departures stay visible over the transits.
+const DRAW_ORDER = ["unknown", "transit", "arrival", "departure"];
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -440,17 +443,18 @@ const DensityLayer = L.Layer.extend({
     for (let i = 0; i < grid.length; i += 7) if (grid[i]) nz.push(grid[i]);
     nz.sort((a, b) => a - b);
     const top = Math.max(2, nz.length ? nz[Math.floor(nz.length * 0.995)] : 2);
-    // Each pixel takes the colour of the class with most tracks through it.
-    // More tracks make it more opaque.
+    // Each pixel takes the colour of the top class in DRAW_ORDER that has a
+    // track through it. More tracks of that class make it more opaque.
+    const topFirst = DRAW_ORDER.map((k) => KIND[k].index).reverse();
     const colors = KINDS.map((k) => hexRGB(kindColor(k.id)));
     const img = ctx.createImageData(w, h);
     const lt = Math.log1p(top);
     for (let i = 0; i < grid.length; i++) {
       const v = grid[i];
       if (!v) continue;
-      const t = Math.min(1, Math.log1p(v) / lt);
-      let best = 0;
-      for (let k = 1; k < grids.length; k++) if (grids[k][i] > grids[best][i]) best = k;
+      let best = topFirst[0];
+      for (const k of topFirst) if (grids[k][i]) { best = k; break; }
+      const t = Math.min(1, Math.log1p(grids[best][i]) / lt);
       const c = colors[best];
       const o = i * 4;
       img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];

@@ -29,7 +29,8 @@ at least 2 km closer to that airport than it started, and a departure 2 km
 further away. A pass that fails this check is a transit. Without an airport, the
 App counts every low descent as an arrival, for any airfield.
 
-On the map, click a class in the legend to hide or show its paths. The
+The map draws transits first, then arrivals, then departures on top. On the
+map, click a class in the legend to hide or show its paths. The
 browser remembers the choice. The Type filter above the charts limits the
 whole page to one class.
 

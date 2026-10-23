@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2
+
+- The map draws transits first, then arrivals, then departures on top, so
+  arrivals and departures stay visible where they cross busy transit routes.
+  A pixel's strength now counts only the tracks of the class drawn there.
+
 ## 0.6.1
 
 - The Latest overflights table has its own period: the last hour, day or
