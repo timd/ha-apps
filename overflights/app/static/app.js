@@ -75,8 +75,16 @@ function el(tag, attrs = {}, parent) {
 
 async function getJSON(path) {
   const r = await fetch(path);
-  if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(`${path}: HTTP ${r.status}`), { status: r.status });
   return r.json();
+}
+
+// Home Assistant's ingress answers 401 when the page's session has expired,
+// for example after the tab slept, and 502 while the App restarts.
+function problem(err) {
+  if (err.status === 401) return "This page's Home Assistant session has expired. Reload the page.";
+  if (err.status >= 500) return "The App is not answering, perhaps because it is restarting. Trying again…";
+  return "Cannot load data: " + err.message;
 }
 
 function km(m) { return fmt1.format(m / 1000) + " km"; }
@@ -667,7 +675,7 @@ async function reload() {
     renderAll();
     await loadTracks();
   } catch (err) {
-    $("#status").textContent = "Cannot load data: " + err.message;
+    $("#status").textContent = problem(err);
   } finally {
     document.body.classList.remove("loading");
   }
@@ -683,7 +691,7 @@ function onRadius() {
   saved.set("radius", $("#radius").value);
   renderAll();
   clearTimeout(trackTimer);
-  trackTimer = setTimeout(loadTracks, 350);
+  trackTimer = setTimeout(() => loadTracks().catch((err) => { $("#status").textContent = problem(err); }), 350);
 }
 
 function renderStatus() {
@@ -722,7 +730,7 @@ async function main() {
   $("#kind").addEventListener("change", () => { saved.set("kind", $("#kind").value); reload(); });
   $("#table-period").addEventListener("change", async () => {
     saved.set("table_period", $("#table-period").value);
-    try { await loadTable(); renderLatest(); } catch (err) { $("#latest-note").textContent = "Cannot load: " + err.message; }
+    try { await loadTable(); renderLatest(); } catch (err) { $("#latest-note").textContent = problem(err); }
   });
   $("#latest-more").addEventListener("click", () => { state.tableLimit += 100; renderLatest(); });
 
@@ -734,9 +742,25 @@ async function main() {
   });
 
   await reload();
-  setInterval(async () => {
-    try { state.info = await getJSON("api/info"); renderStatus(); } catch { /* shown on next reload */ }
-  }, 30000);
+  startPolling();
+  // A hidden tab does not poll, so a sleeping tab sends no requests.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopPolling(); else { poll(); startPolling(); }
+  });
 }
 
-main().catch((err) => { $("#status").textContent = "Cannot start: " + err.message; });
+let pollTimer = null, expired = false;
+async function poll() {
+  if (expired) return;
+  try {
+    state.info = await getJSON("api/info");
+    renderStatus();
+  } catch (err) {
+    $("#status").textContent = problem(err);
+    if (err.status === 401) { expired = true; stopPolling(); }
+  }
+}
+function startPolling() { if (!pollTimer && !expired) pollTimer = setInterval(poll, 30000); }
+function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
+
+main().catch((err) => { $("#status").textContent = problem(err); });

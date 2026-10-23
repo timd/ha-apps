@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import signal
 import time
 from pathlib import Path
 
@@ -258,7 +259,21 @@ async def main():
     demo_db.close()
     sensors = Sensors(db_path, collector, state["classify"], min(opts["default_radius_km"] * 1000, capture_m),
                       opts.get("default_max_altitude_ft"))
-    await asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"], capture_m), sensors.run())
+    # The App runs as PID 1, which ignores SIGTERM unless it handles it. Without
+    # this, the Supervisor waits 10 seconds at each stop and then kills the App.
+    stop = asyncio.Event()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        asyncio.get_running_loop().add_signal_handler(sig, stop.set)
+    work = asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"], capture_m), sensors.run())
+    stopped = asyncio.ensure_future(stop.wait())
+    await asyncio.wait([work, stopped], return_when=asyncio.FIRST_COMPLETED)
+    if work.done():
+        work.result()  # raise whatever ended the work
+    log.info("Stopping")
+    work.cancel()
+    await asyncio.gather(work, return_exceptions=True)
+    await runner.cleanup()
+    db.close()
 
 
 if __name__ == "__main__":

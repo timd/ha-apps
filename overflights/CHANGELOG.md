@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.1
+
+- The App stops at once when the Supervisor stops it. Before, it ignored the
+  stop signal, so each stop or restart waited 10 seconds and then killed it.
+- The page stops polling while its tab is hidden. If Home Assistant's
+  session for the page has expired (HTTP 401), the status line says to
+  reload the page, and polling stops. While the App restarts (HTTP 502), the
+  status line says so and the page keeps trying.
+
 ## 0.7.0
 
 - The option `airport`: enter an ICAO or IATA code, such as EDDB or BER. The
