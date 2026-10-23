@@ -24,7 +24,7 @@ position in the capture area:
 | Transit | Every other pass: level, or too high to be landing or just departed. |
 | Unclassified | Fewer than 3 positions, or no altitude. |
 
-If you set `airport_latitude` and `airport_longitude`, an arrival must also end
+If you set an airport, an arrival must also end
 at least 2 km closer to that airport than it started, and a departure 2 km
 further away. A pass that fails this check is a transit. Without an airport, the
 App counts every low descent as an arrival, for any airfield.
@@ -45,21 +45,31 @@ that only crosses the airport area is not a pass, and the App deletes it.
 
 A receiver some distance away cannot see aircraft low over the airport. Near
 the ground, arrivals and departures disappear several kilometres from the
-runway. If you list the runways in `runways`, the map joins each arrival's
-last position, and each departure's first, to a runway end with a dashed line.
+runway. If the App knows the runways, the map joins each arrival's last
+position, and each departure's first, to a runway end with a dashed line.
 The App joins only an aircraft within 25° of a runway's extended centreline,
 and picks the nearest centreline. An aircraft that the receiver lost on a
 downwind or base leg still has a turn to fly, so its path stays open.
 The dashed line is an estimate, not a received path. Without runways, the
 line goes to the airport position.
 
-Give each runway as its two ends, `lat,lon,lat,lon`. For Berlin
-Brandenburg:
+## Setting the airport
+
+Enter the airport's ICAO code (for example `EDDB`) or IATA code (`BER`) in
+**Airport** on the Configuration tab. The App looks up the airport position
+and its runway ends in a copy of the [OurAirports](https://ourairports.com/)
+database that it carries, so it needs no internet connection. The App log
+names the airport it found and the number of runways. The copy holds large
+and medium airports, and small airports with scheduled flights.
+
+To override the lookup, or for an airfield that it does not know, set
+`airport_latitude` and `airport_longitude`, and list the runways in
+`runways`. Give each runway as its two ends, `lat,lon,lat,lon`:
 
 ```yaml
 runways:
-  - 52.37743,13.52611,52.36768,13.48500
-  - 52.35843,13.52317,52.34543,13.46843
+  - 52.36672,13.48093,52.37841,13.53021
+  - 52.34544,13.46843,52.35843,13.52318
 ```
 
 The App classifies passes when the page asks for them, so a change to these
@@ -77,9 +87,10 @@ is only a view filter, so you can change it at any time without losing data.
 | --- | --- |
 | `receiver_url` | The receiver's data folder, which holds `aircraft.json` and `receiver.json`. |
 | `latitude`, `longitude` | The house position. If empty, the App reads it from `receiver.json`. |
-| `airport_latitude`, `airport_longitude` | Optional. The main airport near the house, used to check arrivals and departures. |
+| `airport` | Optional. The ICAO or IATA code of the main airport near the house. The App looks up its position and runways. |
+| `airport_latitude`, `airport_longitude` | Optional. Override the airport position from the code. |
 | `airport_radius_km` | Positions within this distance of the airport are stored too. 0 turns this off. |
-| `runways` | Optional. Each runway's two ends as `lat,lon,lat,lon`, for the dashed lines on the map. |
+| `runways` | Optional. Override the runways from the code. Each runway's two ends as `lat,lon,lat,lon`. |
 | `capture_radius_km` | Positions further away are not stored, except near the airport. Only aircraft that come this close are passes. |
 | `poll_seconds` | How often the App reads the receiver. |
 | `retention_days` | Passes older than this are deleted. |

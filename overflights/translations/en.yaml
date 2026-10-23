@@ -10,14 +10,18 @@ configuration:
   longitude:
     name: Longitude
     description: The house position. Leave empty to read it from the receiver.
+  airport:
+    name: Airport
+    description: >-
+      Optional. The ICAO or IATA code of the main airport near the house, for
+      example EDDB or BER. The App looks up its position and runways. An arrival
+      must then move toward it, and a departure away from it.
   airport_latitude:
     name: Airport latitude
-    description: >-
-      Optional. The main airport near the house. An arrival must then move toward it,
-      and a departure away from it.
+    description: Optional. Overrides the position found from the airport code.
   airport_longitude:
     name: Airport longitude
-    description: Optional. The main airport near the house.
+    description: Optional. Overrides the position found from the airport code.
   airport_radius_km:
     name: Airport radius (km)
     description: >-
@@ -26,8 +30,9 @@ configuration:
   runways:
     name: Runways
     description: >-
-      Optional. Each runway as "lat,lon,lat,lon", its two ends. The map draws a dashed
-      line from each arrival and departure to a runway end.
+      Optional. Overrides the runways found from the airport code. Each runway as
+      "lat,lon,lat,lon", its two ends. The map draws a dashed line from each arrival
+      and departure to a runway end.
   capture_radius_km:
     name: Capture radius (km)
     description: >-

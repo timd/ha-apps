@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- The option `airport`: enter an ICAO or IATA code, such as EDDB or BER. The
+  App looks up the airport position and its runway ends in a copy of the
+  OurAirports database, without going online. `airport_latitude`,
+  `airport_longitude` and `runways` now only override the lookup.
+- A README on the App's Info tab explains how to install and set it up.
+
 ## 0.6.5
 
 - The map comes first on the page, above the charts.

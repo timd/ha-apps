@@ -11,6 +11,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+import airports
 import demo
 import store
 from classify import COLUMNS, JOINS, KINDS, Classifier
@@ -223,12 +224,23 @@ async def main():
              opts["capture_radius_km"], time.strftime("%Z"))
 
     capture_m = opts["capture_radius_km"] * 1000
-    airport = None
+    airport, runways = None, []
+    if opts.get("airport"):
+        found = airports.lookup(opts["airport"])
+        if found:
+            ident, name, airport, runways = found
+            log.info("Airport %s, %s: %d runways with known ends", ident, name, len(runways))
+        else:
+            log.warning("Unknown airport code %r. Give an ICAO code such as EDDB, or an IATA "
+                        "code such as BER", opts["airport"])
+    # Explicit options override the lookup.
     if opts.get("airport_latitude") is not None and opts.get("airport_longitude") is not None:
         airport = [opts["airport_latitude"], opts["airport_longitude"]]
+    if opts.get("runways"):
+        runways = parse_runways(opts["runways"])
+    if airport:
         log.info("Arrivals and departures are checked against the airport at %.4f,%.4f", *airport)
     airport_m = opts.get("airport_radius_km", 25) * 1000
-    runways = parse_runways(opts.get("runways"))
     collector = Collector(db, home, base + "/aircraft.json", capture_m, opts["poll_seconds"],
                           airport, airport_m)
     state = {"db_path": db_path, "home": home, "collector": collector, "options": opts,

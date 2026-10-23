@@ -33,8 +33,13 @@ describes the options.
 1. Click the button above, or open Settings → Apps → App store, choose
    **Repositories** from the menu, and add `https://github.com/timd/ha-apps`.
 2. Install **Overflights**.
-3. On the Configuration tab, set `receiver_url` to your receiver's data
-   folder. Start the App.
+3. On the Configuration tab, set **Receiver data URL** to your receiver's
+   data folder, and optionally **Airport** to the code of your nearest
+   airport (for example `EDDB` or `BER`). Start the App.
+
+All settings are in the Configuration tab's form; you do not need to edit
+YAML. [overflights/README.md](overflights/README.md) has the full
+installation and setup steps. Home Assistant shows it on the App's Info tab.
 
 The App runs on amd64 and aarch64 (for example a Raspberry Pi 4 or 5).
 
@@ -42,7 +47,9 @@ The App runs on amd64 and aarch64 (for example a Raspberry Pi 4 or 5).
 
 1. Raise `version` in `overflights/config.yaml` and add an entry to
    `overflights/CHANGELOG.md`.
-2. Push to `main`. The Build workflow lints the App and pushes
+2. To refresh the airport data, run `scripts/build_airports.py`. It
+   downloads OurAirports and rewrites `overflights/app/airports.json.gz`.
+3. Push to `main`. The Build workflow lints the App and pushes
    `ghcr.io/timd/{arch}-overflights:<version>`. It never overwrites a version
    that exists.
 
@@ -71,7 +78,8 @@ copies `overflights/` to `/addons/overflights/` on the server without the
 The icon uses the airplane glyph from [Material Design
 Icons](https://pictogrammers.com/library/mdi/) (Apache License 2.0). The page
 uses [Leaflet](https://leafletjs.com/) (BSD 2-Clause) and map tiles from
-[OpenStreetMap](https://www.openstreetmap.org/copyright).
+[OpenStreetMap](https://www.openstreetmap.org/copyright). Airport and runway
+data come from [OurAirports](https://ourairports.com/data/) (public domain).
 
 ## Licence
 
