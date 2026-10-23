@@ -133,6 +133,12 @@ th:first-child, td:first-child { text-align: left; }
 #latest td:nth-child(2), #latest th:nth-child(2),
 #latest td:nth-child(3), #latest th:nth-child(3) { text-align: left; }
 #latest tbody tr:hover { background: var(--empty); }
+.table-filters { margin: 12px 0 8px; align-items: center; }
+.table-filters label { flex-direction: row; align-items: center; gap: 8px; }
+.more {
+  font: inherit; color: var(--text); background: var(--surface); margin-top: 12px;
+  border: 1px solid var(--axis); border-radius: 6px; padding: 5px 12px; cursor: pointer;
+}
 a { color: var(--series-1); }
 
 #tooltip {

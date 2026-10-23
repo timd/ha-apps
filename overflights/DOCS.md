@@ -63,6 +63,9 @@ runways:
 The App classifies passes when the page asks for them, so a change to these
 options also applies to the passes that are already stored.
 
+The Latest overflights table has its own period: the last hour, day or
+week, or all time. It also uses the page's radius, altitude and type filters.
+
 The page filters by radius and by altitude at the closest point. The radius
 is only a view filter, so you can change it at any time without losing data.
 

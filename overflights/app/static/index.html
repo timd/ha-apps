@@ -87,8 +87,21 @@
   <section class="card loadable">
     <h2>Latest overflights</h2>
     <p class="muted">Point at a row to show its path on the map. A pass that descends is an arrival,
-      one that climbs is a departure, and one that stays level or is high is a transit.</p>
+      one that climbs is a departure, and one that stays level or is high is a transit. The table
+      has its own period, and uses the radius, altitude and type filters above.</p>
+    <div class="filters table-filters">
+      <label>Show
+        <select id="table-period">
+          <option value="3600">Last hour</option>
+          <option value="86400" selected>Last day</option>
+          <option value="604800">Last week</option>
+          <option value="0">All time</option>
+        </select>
+      </label>
+      <span id="latest-note" class="muted" aria-live="polite"></span>
+    </div>
     <div class="table-wrap"><table id="latest"></table></div>
+    <button id="latest-more" class="more" type="button" hidden>Show 100 more</button>
   </section>
 </main>
 <div id="tooltip" role="status" hidden></div>

@@ -34,6 +34,8 @@ const state = {
   passes: [],     // [id, ts, dist_m, alt_ft, flight, hex, kind] within the capture radius
   since: 0,
   tracks: new Map(),
+  tablePasses: [], // the table's passes, before the radius filter
+  tableLimit: 100,
   trackLimitHit: false,
 };
 
@@ -542,13 +544,36 @@ function renderMapLegend() {
 
 // ---------- latest table ----------
 
-function renderLatest(rows) {
+const TABLE_PERIODS = { 3600: "in the last hour", 86400: "in the last day", 604800: "in the last week", 0: "since logging began" };
+
+// The table has its own period. It reuses the page's passes when they cover
+// that period, and otherwise asks the server with the same filters.
+async function loadTable() {
+  const secs = Number($("#table-period").value);
+  const since = secs ? Math.floor(Date.now() / 1000 - secs) : 0;
+  state.tableLimit = 100;
+  if (since >= state.since) {
+    state.tablePasses = state.passes.filter((p) => p[1] >= since);
+  } else {
+    state.tablePasses = (await getJSON("api/passes?" + query({ since }))).rows;
+  }
+}
+
+function renderLatest() {
+  const r = radiusM();
+  const rows = state.tablePasses.filter((p) => p[2] <= r);
+  const shown = rows.slice(-state.tableLimit).reverse();
+  const period = TABLE_PERIODS[$("#table-period").value];
+  $("#latest-note").textContent = rows.length > shown.length
+    ? `The newest ${fmt.format(shown.length)} of ${fmt.format(rows.length)} overflights ${period}.`
+    : `${fmt.format(rows.length)} overflight${rows.length === 1 ? "" : "s"} ${period}.`;
+  $("#latest-more").hidden = rows.length <= shown.length;
   const table = $("#latest");
   table.replaceChildren();
   const head = el("tr", {}, el("thead", {}, table));
   for (const h of ["Time", "Flight", "Type", "Closest", "Altitude", ""]) el("th", { text: h }, head);
   const body = el("tbody", {}, table);
-  for (const p of rows.slice(-100).reverse()) {
+  for (const p of shown) {
     const [id, ts, dist, alt, flight, hex, kind] = p;
     const tr = el("tr", {}, body);
     const d = new Date(ts * 1000);
@@ -572,7 +597,7 @@ function renderLatest(rows) {
     tr.addEventListener("pointerleave", () => density.setHighlight(null));
   }
   if (!rows.length) {
-    el("td", { colspan: 6, class: "empty-note", text: "No overflights in this period yet." }, el("tr", {}, body));
+    el("td", { colspan: 6, class: "empty-note", text: `No overflights ${period}.` }, el("tr", {}, body));
   }
 }
 
@@ -619,7 +644,7 @@ function renderAll() {
   renderWeek(rows);
   renderDays(rows);
   renderHist();
-  renderLatest(rows);
+  renderLatest();
   renderMapLegend();
   radiusCircle.setRadius(radiusM());
 }
@@ -630,6 +655,7 @@ async function reload() {
     state.info = await getJSON("api/info");
     renderStatus();
     await loadPasses();
+    await loadTable();
     renderAll();
     await loadTracks();
   } catch (err) {
@@ -678,11 +704,19 @@ async function main() {
   $("#kind").value = kind;
   if ($("#kind").value !== kind) $("#kind").value = "";
 
+  const tablePeriod = saved.get("table_period");
+  if (tablePeriod && tablePeriod in TABLE_PERIODS) $("#table-period").value = tablePeriod;
+
   setupMap();
   r.addEventListener("input", onRadius);
   $("#period").addEventListener("change", () => { saved.set("period", $("#period").value); reload(); });
   $("#max-alt").addEventListener("change", () => { saved.set("max_alt", $("#max-alt").value); reload(); });
   $("#kind").addEventListener("change", () => { saved.set("kind", $("#kind").value); reload(); });
+  $("#table-period").addEventListener("change", async () => {
+    saved.set("table_period", $("#table-period").value);
+    try { await loadTable(); renderLatest(); } catch (err) { $("#latest-note").textContent = "Cannot load: " + err.message; }
+  });
+  $("#latest-more").addEventListener("click", () => { state.tableLimit += 100; renderLatest(); });
 
   let resizeTimer;
   addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 150); });

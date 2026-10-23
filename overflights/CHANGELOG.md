@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1
+
+- The Latest overflights table has its own period: the last hour, day or
+  week, or all time. It still uses the radius, altitude and type filters. The
+  browser remembers the choice.
+- The table shows 100 rows at first. "Show 100 more" adds rows.
+
 ## 0.6.0
 
 - With an airport set, the App also stores positions within
