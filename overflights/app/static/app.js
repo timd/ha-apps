@@ -495,7 +495,10 @@ function toggleKind(kind) {
 
 function setupMap() {
   const home = state.info.home;
-  map = L.map("map", { zoomAnimation: false, scrollWheelZoom: false });
+  // Quarter-level zoom steps, and half a level for each button press or
+  // wheel notch, so zooming moves in small steps.
+  map = L.map("map", { zoomAnimation: false, scrollWheelZoom: false,
+                       zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 120 });
   const bounds = L.latLng(home).toBounds(2 * state.info.capture_radius_m);
   // Show the airport too, where arrivals and departures end.
   if (state.info.airport) bounds.extend(L.latLng(state.info.airport).toBounds(8000));

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.4
+
+- The map zooms in smaller steps: half a level for each button press or
+  wheel notch, and it can rest between whole levels. The first view fits
+  the house area and the airport more closely.
+
 ## 0.6.3
 
 - Map tracks fade with age: full strength for the last day, medium for the
