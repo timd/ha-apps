@@ -129,9 +129,9 @@ def parse_runways(entries):
 def make_app(state):
     routes = web.RouteTableDef()
 
-    # The page names its script and stylesheet with a hash of their contents,
-    # so a browser never runs a new page with an old script after an update.
-    stamp = hashlib.sha1(b"".join((STATIC / f).read_bytes() for f in ("app.js", "style.css"))).hexdigest()[:10]
+    # The page names its scripts and stylesheets with a hash of all static
+    # files, so a browser fetches new copies after any update.
+    stamp = hashlib.sha1(b"".join(f.read_bytes() for f in sorted(STATIC.rglob("*")) if f.is_file())).hexdigest()[:10]
     page = (STATIC / "index.html").read_text().replace(".js\"", f".js?v={stamp}\"").replace(
         ".css\"", f".css?v={stamp}\"")
 

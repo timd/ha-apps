@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3
+
+- The version stamp on the page's script and stylesheet links covers every
+  static file, including Leaflet. Before, a browser kept its cached Leaflet
+  after an update that changed only Leaflet.
+
 ## 0.7.2
 
 - The bundled Leaflet no longer names a source map that the App does not
