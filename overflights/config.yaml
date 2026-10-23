@@ -1,7 +1,7 @@
 # Logs aircraft that pass near the house from an ADS-B receiver
 # (PiAware/SkyAware, tar1090, readsb) and charts when and where they fly.
 name: Overflights
-version: "0.7.3"
+version: "0.7.4"
 slug: overflights
 description: Logs aircraft that pass over the house and charts when and where they fly.
 url: https://github.com/timd/ha-apps/tree/main/overflights
@@ -16,6 +16,10 @@ panel_title: Overflights
 # SQLite in WAL mode can restore broken from a copy taken while it writes.
 # A cold backup stops the App for the seconds the copy takes.
 backup: cold
+# The map tile cache can be fetched again, so backups leave it out.
+backup_exclude:
+  - tiles
+  - tiles/*
 # Home Assistant sensors go through the MQTT broker, if there is one.
 services:
   - mqtt:want
@@ -45,3 +49,4 @@ schema:
   default_radius_km: float(0.5,100)
   default_max_altitude_ft: int(0,60000)
   demo_data: bool
+  tile_url: url?

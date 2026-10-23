@@ -15,6 +15,7 @@ from aiohttp import web
 import airports
 import demo
 import store
+import tiles
 from classify import COLUMNS, JOINS, KINDS, Classifier
 from sensors import Sensors
 from collector import PASS_GAP_S, Collector
@@ -25,6 +26,7 @@ DATA_DIR = Path(os.environ.get("OVERFLIGHTS_DATA", "/data"))
 OPTIONS = Path(os.environ.get("OVERFLIGHTS_OPTIONS", DATA_DIR / "options.json"))
 STATIC = Path(__file__).parent / "static"
 PORT = int(os.environ.get("OVERFLIGHTS_PORT", "8099"))
+DEFAULT_TILE_URL = "https://tile.openstreetmap.de/{z}/{x}/{y}.png"
 # The page asks for at most this many tracks, newest first.
 MAX_TRACKS = 20000
 
@@ -188,12 +190,16 @@ def make_app(state):
 
     app = web.Application()
     app.add_routes(routes)
+    app.router.add_get("/tiles/{z}/{x}/{y}.png", state["tiles"].handle)
     app.router.add_static("/static/", STATIC)
     return app
 
 
-async def prune_loop(db, days, capture_m):
+async def prune_loop(db, days, capture_m, tile_cache):
     while True:
+        n = await asyncio.to_thread(tile_cache.prune)
+        if n:
+            log.info("Deleted %d old map tiles", n)
         n = store.prune(db, int(time.time()) - days * 86400)
         if n:
             log.info("Deleted %d passes older than %d days", n, days)
@@ -246,7 +252,8 @@ async def main():
                           airport, airport_m)
     state = {"db_path": db_path, "home": home, "collector": collector, "options": opts,
              "capture_m": capture_m, "airport": airport, "airport_m": airport_m,
-             "runways": runways, "classify": Classifier(home, airport)}
+             "runways": runways, "classify": Classifier(home, airport),
+             "tiles": tiles.TileCache(DATA_DIR / "tiles", opts.get("tile_url") or DEFAULT_TILE_URL)}
 
     runner = web.AppRunner(make_app(state), access_log=None)
     await runner.setup()
@@ -264,7 +271,7 @@ async def main():
     stop = asyncio.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         asyncio.get_running_loop().add_signal_handler(sig, stop.set)
-    work = asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"], capture_m), sensors.run())
+    work = asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"], capture_m, state["tiles"]), sensors.run())
     stopped = asyncio.ensure_future(stop.wait())
     await asyncio.wait([work, stopped], return_when=asyncio.FIRST_COMPLETED)
     if work.done():
@@ -273,6 +280,7 @@ async def main():
     work.cancel()
     await asyncio.gather(work, return_exceptions=True)
     await runner.cleanup()
+    await state["tiles"].close()
     db.close()
 
 

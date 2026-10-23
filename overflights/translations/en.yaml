@@ -55,3 +55,9 @@ configuration:
     description: >-
       Adds 60 days of made-up passes built from the receiver's last hour of tracks.
       Turn it off and restart to delete them. Sensors never count them.
+  tile_url:
+    name: Map tile URL
+    description: >-
+      Optional. The tile server for the map, with {z}, {x} and {y}. Empty means
+      https://tile.openstreetmap.de/{z}/{x}/{y}.png. The App fetches each tile
+      once a month at most.

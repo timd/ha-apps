@@ -511,7 +511,8 @@ function setupMap() {
   // Show the airport too, where arrivals and departures end.
   if (state.info.airport) bounds.extend(L.latLng(state.info.airport).toBounds(8000));
   map.fitBounds(bounds);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  // The App fetches each tile once and keeps it (see tiles.py).
+  L.tileLayer("tiles/{z}/{x}/{y}.png", {
     maxZoom: 18,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);

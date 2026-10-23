@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.4
+
+- The App fetches the map tiles, keeps them for 30 days, and serves them to
+  the page. Before, each browser fetched them from OpenStreetMap, which can
+  block an address that fetches too many and then shows "Access blocked".
+- The tiles come from `tile.openstreetmap.de`. The new `tile_url` option sets
+  another server.
+
 ## 0.7.3
 
 - The version stamp on the page's script and stylesheet links covers every

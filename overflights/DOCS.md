@@ -97,6 +97,18 @@ is only a view filter, so you can change it at any time without losing data.
 | `default_radius_km` | What counts as overhead: the page's radius until a viewer changes it, and the radius for the sensors. |
 | `default_max_altitude_ft` | The altitude limit for the page and the sensors. 0 means any altitude. |
 | `demo_data` | Adds 60 days of demo passes, made from the receiver's last hour of real tracks. Turn it off to delete them. |
+| `tile_url` | Optional. The map's tile server, with `{z}`, `{x}` and `{y}`. Empty means `https://tile.openstreetmap.de/{z}/{x}/{y}.png`. |
+
+## Map tiles
+
+The page gets its map tiles from the App, not from the tile server. The App
+fetches each tile once, keeps it in `/data/tiles` for 30 days, and names
+itself to the tile server. This follows the [OpenStreetMap tile
+policy](https://operations.osmfoundation.org/policies/tiles/), which blocks
+browsers that fetch too many tiles. Backups leave the tiles out.
+
+If the map shows "Access blocked" or stays grey, the App log names the tile
+server that refused. Set `tile_url` to another server.
 
 ## Sensors
 

@@ -78,7 +78,8 @@ copies `overflights/` to `/addons/overflights/` on the server without the
 The icon uses the airplane glyph from [Material Design
 Icons](https://pictogrammers.com/library/mdi/) (Apache License 2.0). The page
 uses [Leaflet](https://leafletjs.com/) (BSD 2-Clause) and map tiles from
-[OpenStreetMap](https://www.openstreetmap.org/copyright). Airport and runway
+[OpenStreetMap](https://www.openstreetmap.org/copyright), served by the
+[German OpenStreetMap association](https://www.openstreetmap.de/). Airport and runway
 data come from [OurAirports](https://ourairports.com/data/) (public domain).
 
 ## Licence
