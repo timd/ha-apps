@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.2
+
+- The bundled Leaflet no longer names a source map that the App does not
+  ship, so browser developer tools show no 404 for `leaflet.js.map`.
+
 ## 0.7.1
 
 - The App stops at once when the Supervisor stops it. Before, it ignored the
