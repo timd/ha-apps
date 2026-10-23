@@ -55,6 +55,13 @@
   <section class="tiles" id="tiles" aria-live="polite"></section>
 
   <section class="card loadable">
+    <h2>Where they fly</h2>
+    <p class="muted" id="map-note">Paths of the aircraft that came within the radius.</p>
+    <div id="map"></div>
+    <div class="map-legend" id="map-legend"></div>
+  </section>
+
+  <section class="card loadable">
     <h2>When they fly over</h2>
     <p class="muted">Overflights in each hour of the week, in local time.</p>
     <div id="week" class="chart"></div>
@@ -75,13 +82,6 @@
     <p class="muted">All aircraft in the period by distance at their closest point to the house.
       Bars inside the radius are blue. Click a bar to set the radius.</p>
     <div id="hist" class="chart"></div>
-  </section>
-
-  <section class="card loadable">
-    <h2>Where they fly</h2>
-    <p class="muted" id="map-note">Paths of the aircraft that came within the radius.</p>
-    <div id="map"></div>
-    <div class="map-legend" id="map-legend"></div>
   </section>
 
   <section class="card loadable">

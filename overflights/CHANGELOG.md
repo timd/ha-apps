@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.5
+
+- The map comes first on the page, above the charts.
+
 ## 0.6.4
 
 - The map zooms in smaller steps: half a level for each button press or
