@@ -356,6 +356,13 @@ function runwayLink(kind, pts) {
   return best;
 }
 
+// Tracks fade with age. Each bucket is [label, maximum age in seconds, opacity].
+const AGES = [["Last day", 86400, 1], ["Last week", 7 * 86400, 0.6], ["Older", Infinity, 0.28]];
+function ageOpacity(ts) {
+  const age = Date.now() / 1000 - ts;
+  return AGES.find(([, max]) => age <= max)[2];
+}
+
 // Each track is drawn 3 px wide: the pixel and its eight neighbours.
 const BRUSH = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [dx, dy]));
 function hexRGB(h) { return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); }
@@ -373,7 +380,7 @@ const DensityLayer = L.Layer.extend({
     L.DomUtil.remove(this._canvas);
     map.off("moveend resize", this.redraw, this);
   },
-  setTracks(tracks) { this._tracks = tracks; this.redraw(); },  // id -> {kind, pts, link}
+  setTracks(tracks) { this._tracks = tracks; this.redraw(); },  // id -> {kind, ts, pts, link}
   setHighlight(id) { this._highlight = id; this.redraw(); },
   setHidden(kinds) { this._hidden = kinds; this.redraw(); },  // a Set of kind ids
 
@@ -398,13 +405,9 @@ const DensityLayer = L.Layer.extend({
       return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * scale - origin.y;
     };
 
-    // Count how many tracks of each class cross each pixel. `seen` holds the
-    // last track that touched a pixel, so a track counts once however often
-    // it crosses.
+    // For each class, keep the opacity of the newest track through each pixel.
     const grids = KINDS.map(() => new Float32Array(w * h));
-    const grid = new Float32Array(w * h);
-    const seen = new Int32Array(w * h);
-    let n = 0, kgrid;
+    let kgrid, alpha;
     // Mark the pixels of one segment. A dashed segment counts its dashes from
     // (x0, y0), so the dashes of many tracks line up at the runway end.
     const segment = (x0, y0, x1, y1, dashed) => {
@@ -417,15 +420,15 @@ const DensityLayer = L.Layer.extend({
           const x = cx + dx, y = cy + dy;
           if (x < 0 || y < 0 || x >= w || y >= h) continue;
           const idx = y * w + x;
-          if (seen[idx] !== n) { seen[idx] = n; grid[idx]++; kgrid[idx]++; }
+          if (kgrid[idx] < alpha) kgrid[idx] = alpha;
         }
       }
     };
     const hidden = this._hidden || new Set();
-    for (const { kind, pts, link } of tracks.values()) {
+    for (const { kind, ts, pts, link } of tracks.values()) {
       if (hidden.has(kind)) continue;
-      n++;
       kgrid = grids[KIND[kind].index];
+      alpha = ageOpacity(ts);
       let x0, y0;
       for (let i = 0; i < pts.length; i += 2) {
         const x1 = px(pts[i + 1]), y1 = py(pts[i]);
@@ -438,27 +441,19 @@ const DensityLayer = L.Layer.extend({
       }
     }
 
-    // Log scale against a high percentile, so one busy pixel does not wash out the rest.
-    const nz = [];
-    for (let i = 0; i < grid.length; i += 7) if (grid[i]) nz.push(grid[i]);
-    nz.sort((a, b) => a - b);
-    const top = Math.max(2, nz.length ? nz[Math.floor(nz.length * 0.995)] : 2);
     // Each pixel takes the colour of the top class in DRAW_ORDER that has a
-    // track through it. More tracks of that class make it more opaque.
+    // track through it, at the opacity of that class's newest track there.
     const topFirst = DRAW_ORDER.map((k) => KIND[k].index).reverse();
     const colors = KINDS.map((k) => hexRGB(kindColor(k.id)));
     const img = ctx.createImageData(w, h);
-    const lt = Math.log1p(top);
-    for (let i = 0; i < grid.length; i++) {
-      const v = grid[i];
-      if (!v) continue;
-      let best = topFirst[0];
+    for (let i = 0; i < w * h; i++) {
+      let best = -1;
       for (const k of topFirst) if (grids[k][i]) { best = k; break; }
-      const t = Math.min(1, Math.log1p(grids[best][i]) / lt);
+      if (best < 0) continue;
       const c = colors[best];
       const o = i * 4;
       img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
-      img.data[o + 3] = Math.round(255 * (0.55 + 0.45 * t));
+      img.data[o + 3] = Math.round(255 * grids[best][i]);
     }
     ctx.putImageData(img, 0, 0);
 
@@ -535,7 +530,13 @@ function renderMapLegend() {
   }
   let linked = false;
   for (const t of state.tracks.values()) if (t.link && !hiddenKinds.has(t.kind)) { linked = true; break; }
-  el("span", { class: "muted-note", text: "Click a class to show or hide it. Stronger colour: more aircraft." +
+  const ages = el("span", { class: "ages", "aria-label": "Track age" }, box);
+  for (const [label, , opacity] of AGES) {
+    const key = el("span", { class: "age" }, ages);
+    el("span", { class: "age-line", style: `opacity: ${opacity}` }, key);
+    key.append(label);
+  }
+  el("span", { class: "muted-note", text: "Click a class to show or hide it. Older tracks are fainter." +
     (linked ? " Dashed: the path to or from the runway, below the receiver's view and estimated." : "") }, box);
   const n = state.tracks.size;
   let drawn = 0;
@@ -627,14 +628,14 @@ async function loadTracks() {
   const data = await getJSON("api/tracks?" + query({ radius: Math.round(radiusM()) }));
   if (seq !== trackSeq) return;
   const tracks = new Map();
-  for (const [id, kind, deltas] of data.tracks) {
+  for (const [id, kind, ts, deltas] of data.tracks) {
     const pts = new Float64Array(deltas.length);
     let lat = 0, lon = 0;
     for (let i = 0; i < deltas.length; i += 2) {
       lat += deltas[i]; lon += deltas[i + 1];
       pts[i] = lat / 1e5; pts[i + 1] = lon / 1e5;
     }
-    tracks.set(id, { kind, pts, link: runwayLink(kind, pts) });
+    tracks.set(id, { kind, ts, pts, link: runwayLink(kind, pts) });
   }
   state.tracks = tracks;
   state.trackLimitHit = data.tracks.length >= data.limit;

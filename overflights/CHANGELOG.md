@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.3
+
+- Map tracks fade with age: full strength for the last day, medium for the
+  last week, faint for older ones. The legend shows the three steps. Opacity
+  no longer shows how many aircraft crossed a point.
+
 ## 0.6.2
 
 - The map draws transits first, then arrivals, then departures on top, so

@@ -82,12 +82,13 @@ def read_passes(db_path, classify, where, args, kinds):
 
 
 def read_tracks(db_path, classify, where, args, kinds):
-    """Return each track as [id, kind, coords]: first point, then deltas (1e-5 deg)."""
+    """Return each track as [id, kind, ts, coords]: `ts` is the time of the
+    closest point, and `coords` the first point, then deltas (1e-5 deg)."""
     db = store.connect(db_path)
     try:
         kind_of = {}
         for row in classified(db, classify, where, args, kinds, order="DESC"):
-            kind_of[row[0]] = row[6]
+            kind_of[row[0]] = (row[6], row[1])
             if len(kind_of) >= MAX_TRACKS:
                 break
         rows = db.execute(
@@ -100,7 +101,7 @@ def read_tracks(db_path, classify, where, args, kinds):
         for pid, lat, lon in rows:
             if pid != current:
                 current, coords, plat, plon = pid, [], 0, 0
-                tracks.append([pid, kind_of[pid], coords])
+                tracks.append([pid, *kind_of[pid], coords])
             coords += (lat - plat, lon - plon)
             plat, plon = lat, lon
         return tracks

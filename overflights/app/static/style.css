@@ -87,7 +87,7 @@ input[type="range"] { accent-color: var(--series-1); width: 100%; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-.tile .label { color: var(--text-2); font-size: 13px; }
+.tile .label { color: var(--text-2); }
 .tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
 .tile .sub { color: var(--muted); font-size: 12px; }
 
@@ -133,6 +133,9 @@ th:first-child, td:first-child { text-align: left; }
 #latest td:nth-child(2), #latest th:nth-child(2),
 #latest td:nth-child(3), #latest th:nth-child(3) { text-align: left; }
 #latest tbody tr:hover { background: var(--empty); }
+.ages { display: inline-flex; gap: 12px; margin-left: 8px; color: var(--text-2); }
+.age { display: inline-flex; align-items: center; gap: 6px; }
+.age-line { display: inline-block; width: 18px; height: 3px; border-radius: 2px; background: var(--text); }
 .table-filters { margin: 12px 0 8px; align-items: center; }
 .table-filters label { flex-direction: row; align-items: center; gap: 8px; }
 .more {
