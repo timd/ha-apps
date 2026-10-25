@@ -143,12 +143,15 @@ def last_overhead(state):
     if not row:
         return None
     pid, hex_, flight, ts, dist, alt = row[:6]
+    track = [[lat / 1e5, lon / 1e5] for lat, lon in db.execute(
+        "SELECT lat_e5, lon_e5 FROM positions WHERE pass_id = ? ORDER BY ts", (pid,))]
     # The stored position nearest the closest point.
     lat, lon = (v / 1e5 for v in db.execute(
         "SELECT lat_e5, lon_e5 FROM positions WHERE pass_id = ? ORDER BY abs(ts - ?) LIMIT 1",
         (pid, ts)).fetchone())
     entry = {"pass_id": pid, "hex": hex_, "callsign": flight, "ts": ts, "distance_m": dist,
-             "altitude_ft": alt, "lat": lat, "lon": lon, "kind": state["classify"](*row[6:])}
+             "altitude_ft": alt, "lat": lat, "lon": lon, "kind": state["classify"](*row[6:]),
+             "track": track}
     if state["lookup"]:
         entry.update(state["lookup"].details(hex_, flight, lat, lon))
     return entry

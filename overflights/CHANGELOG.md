@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.2
+
+- The map draws the Last overhead aircraft's path in bright yellow, instead
+  of a ring at its closest point.
+
 ## 0.9.1
 
 - When no aircraft is within the radius, the Overhead now card becomes

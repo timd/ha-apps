@@ -704,11 +704,17 @@ function planeRow(box, a, past, now) {
     el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(a.hex)}` + (past ? `&showTrace=${day}` : ""),
               target: "_blank", rel: "noopener", text: past ? "Trace" : "Live track" }, figures);
   }
-  // A logged pass is marked at its closest point, as a hollow ring.
-  L.circleMarker([a.lat, a.lon], { radius: 6, color: past ? css("--text") : css("--surface"), weight: 2,
-                                   fillColor: css("--text"), fillOpacity: past ? 0 : 1, interactive: false })
-    .bindTooltip(name, { permanent: true, direction: "right", offset: [8, 0], className: "plane-label" })
-    .addTo(nowLayer);
+  if (past) {
+    // The last overflight's path, in yellow over a dark edge so that it
+    // stands out on the grey map in both themes.
+    L.polyline(a.track, { color: "#000", opacity: 0.45, weight: 7, interactive: false }).addTo(nowLayer);
+    L.polyline(a.track, { color: css("--last"), weight: 4, interactive: false }).addTo(nowLayer);
+  } else {
+    L.circleMarker([a.lat, a.lon], { radius: 6, color: css("--surface"), weight: 2, fillColor: css("--text"),
+                                     fillOpacity: 1, interactive: false })
+      .bindTooltip(name, { permanent: true, direction: "right", offset: [8, 0], className: "plane-label" })
+      .addTo(nowLayer);
+  }
 }
 
 // The radius slider is shared: the App keeps its value, and the Overhead

@@ -16,6 +16,7 @@
   --departure: #eb6834;
   --transit: #1baf7a;
   --unknown: #7a7974;
+  --last: #ffd60a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -36,6 +37,7 @@
     --departure: #d95926;
     --transit: #199e70;
     --unknown: #a3a29b;
+  --last: #ffd60a;
   }
 }
 :root[data-theme="dark"] {
@@ -56,6 +58,7 @@
   --departure: #d95926;
   --transit: #199e70;
   --unknown: #a3a29b;
+  --last: #ffd60a;
 }
 
 * { box-sizing: border-box; }
