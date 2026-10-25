@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0
+
+- The page's radius slider is shared. The App keeps its value, every browser
+  opens with it, and an open page follows a change made elsewhere.
+- The slider sets the radius of both the Overhead now card and
+  `sensor.overflights_overhead`, so they always agree. The sensor has a new
+  attribute, `radius_km`.
+- The option `now_radius_km` is gone.
+
 ## 0.8.2
 
 - The Overhead now card uses the page's radius slider, and updates as the

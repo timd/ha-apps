@@ -94,8 +94,7 @@ is only a view filter, so you can change it at any time without losing data.
 | `capture_radius_km` | Positions further away are not stored, except near the airport. Only aircraft that come this close are passes. |
 | `poll_seconds` | How often the App reads the receiver. |
 | `retention_days` | Passes older than this are deleted. |
-| `default_radius_km` | What counts as overhead: the page's radius until a viewer changes it, and the radius for the overflight sensors. |
-| `now_radius_km` | The radius for `sensor.overflights_overhead`. The Overhead now card uses the page's radius slider. |
+| `default_radius_km` | The radius for the Today and Last sensors, and the page's radius until someone moves the slider. |
 | `default_max_altitude_ft` | The altitude limit for the page and the sensors. 0 means any altitude. |
 | `online_lookup` | Look up the registration, type, operator and route of each aircraft overhead at adsbdb.com. |
 | `demo_data` | Adds 60 days of demo passes, made from the receiver's last hour of real tracks. Turn it off to delete them. |
@@ -105,8 +104,13 @@ is only a view filter, so you can change it at any time without losing data.
 
 The card at the top of the page lists the aircraft that are overhead now,
 nearest first: those within the page's radius of the house, and below
-`default_max_altitude_ft`. Move the radius slider to widen or narrow the
-card. `sensor.overflights_overhead` uses `now_radius_km` (1 km) instead. The
+`default_max_altitude_ft`. `sensor.overflights_overhead` uses the same
+radius.
+
+The radius slider is shared. The App keeps its value, so every browser opens
+with it, and an open page follows a change made in another browser. Moving
+the slider also changes the Overhead sensor. Until someone moves the slider,
+the radius is `default_radius_km`. The
 map marks each one with its callsign. The card updates every 5 seconds.
 
 The receiver gives only the aircraft's address, callsign, position, altitude
@@ -136,7 +140,7 @@ server that refused. Set `tile_url` to another server.
 
 If Home Assistant has an MQTT broker, such as the Mosquitto app, the App adds
 a device called Overflights with four entities. They count only aircraft within
-`default_radius_km` (the Overhead sensor: `now_radius_km`) and below
+`default_radius_km` (the Overhead sensor: the page's radius slider) and below
 `default_max_altitude_ft`. Demo passes never
 count. The App publishes a change within 5 seconds.
 
@@ -144,7 +148,7 @@ count. The App publishes a change within 5 seconds.
 | --- | --- |
 | `sensor.overflights_today` | Overflights since midnight. Long-term statistics keep the daily totals. |
 | `sensor.overflights_last` | Callsign of the latest overflight. Attributes: time, distance, altitude, hex, kind (arrival, departure, transit or unknown). |
-| `sensor.overflights_overhead` | The number of aircraft overhead now. Attributes describe the nearest: callsign, hex, registration, type, icao_type, operator, origin, origin_name, destination, destination_name, route_plausible, altitude_ft, distance_km, speed_kt, photo. `aircraft` lists the callsigns of all of them. |
+| `sensor.overflights_overhead` | The number of aircraft overhead now, within the page's radius. `radius_km` gives that radius. Other attributes describe the nearest: callsign, hex, registration, type, icao_type, operator, origin, origin_name, destination, destination_name, route_plausible, altitude_ft, distance_km, speed_kt, photo. `aircraft` lists the callsigns of all of them. |
 | `binary_sensor.overflights_receiver` | Off when the App has not read the receiver for 2 minutes. |
 
 ## Storage

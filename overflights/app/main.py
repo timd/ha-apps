@@ -28,6 +28,8 @@ OPTIONS = Path(os.environ.get("OVERFLIGHTS_OPTIONS", DATA_DIR / "options.json"))
 STATIC = Path(__file__).parent / "static"
 PORT = int(os.environ.get("OVERFLIGHTS_PORT", "8099"))
 DEFAULT_TILE_URL = "https://tile.openstreetmap.de/{z}/{x}/{y}.png"
+# The smallest radius the page's slider can set.
+MIN_RADIUS_M = 500
 # The page asks for at most this many tracks, newest first.
 MAX_TRACKS = 20000
 
@@ -114,10 +116,10 @@ def read_tracks(db_path, classify, where, args, kinds):
         db.close()
 
 
-def overhead_now(state, radius_m=None):
+def overhead_now(state):
     """The aircraft overhead now, nearest first, with what adsbdb knows of them."""
     out = []
-    for entry in state["collector"].overhead(radius_m):
+    for entry in state["collector"].overhead():
         entry = dict(entry)
         if state["lookup"]:
             entry.update(state["lookup"].details(entry["hex"], entry["callsign"], entry["lat"], entry["lon"]))
@@ -167,7 +169,7 @@ def make_app(state):
         return web.json_response({
             "home": [state["home"].lat, state["home"].lon],
             "capture_radius_m": round(opts["capture_radius_km"] * 1000),
-            "default_radius_m": round(opts["default_radius_km"] * 1000),
+            "radius_m": round(c.overhead_m),
             "default_max_alt_ft": opts.get("default_max_altitude_ft") or None,
             "airport": state["airport"],
             "airport_radius_m": state["airport_m"] if state["airport"] else None,
@@ -183,21 +185,29 @@ def make_app(state):
         })
 
     @routes.get("/api/now")
-    async def now(request):
-        """The page passes its radius slider as `radius` (metres)."""
+    async def now(_request):
         c = state["collector"]
-        try:
-            radius = min(float(request.query["radius"]), state["capture_m"])
-        except (KeyError, ValueError):
-            radius = c.overhead_m
         return web.json_response({
-            "radius_m": radius,
+            "radius_m": round(c.overhead_m),
             "max_alt_ft": c.overhead_alt_ft,
             "lookup": state["lookup"] is not None,
             "receiving": c.last_error is None and c.last_ok is not None,
-            "aircraft": overhead_now(state, radius),
+            "aircraft": overhead_now(state),
             "now": time.time(),
         })
+
+    @routes.post("/api/radius")
+    async def set_radius(request):
+        """The page's radius slider sets what counts as overhead now, for the
+        page in every browser and for the Overhead sensor."""
+        try:
+            radius = float((await request.json())["radius_m"])
+        except (KeyError, TypeError, ValueError):
+            raise web.HTTPBadRequest(text="Give radius_m in metres.")
+        radius = max(MIN_RADIUS_M, min(radius, state["capture_m"]))
+        state["collector"].overhead_m = radius
+        store.set_meta(state["db"], "radius_m", round(radius))
+        return web.json_response({"radius_m": round(radius)})
 
     @routes.get("/api/passes")
     async def passes(request):
@@ -280,11 +290,13 @@ async def main():
         log.info("Arrivals and departures are checked against the airport at %.4f,%.4f", *airport)
     airport_m = opts.get("airport_radius_km", 25) * 1000
     overhead_m = min(opts["default_radius_km"] * 1000, capture_m)
-    now_m = min(opts.get("now_radius_km", 1) * 1000, capture_m)
+    # The page's radius slider sets the radius for Overhead now. Until it has
+    # been moved, the radius is default_radius_km.
+    now_m = min(float(store.get_meta(db, "radius_m") or overhead_m), capture_m)
     collector = Collector(db, home, base + "/aircraft.json", capture_m, opts["poll_seconds"],
                           airport, airport_m, now_m, opts.get("default_max_altitude_ft"))
     lookup = Lookup(db) if opts.get("online_lookup", True) else None
-    state = {"db_path": db_path, "home": home, "collector": collector, "options": opts, "lookup": lookup,
+    state = {"db_path": db_path, "db": db, "home": home, "collector": collector, "options": opts, "lookup": lookup,
              "capture_m": capture_m, "airport": airport, "airport_m": airport_m,
              "runways": runways, "classify": Classifier(home, airport),
              "tiles": tiles.TileCache(DATA_DIR / "tiles", opts.get("tile_url") or DEFAULT_TILE_URL)}

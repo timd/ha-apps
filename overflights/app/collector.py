@@ -45,7 +45,7 @@ class Collector:
         """`airport` is (lat, lon) or None. Positions within `airport_m` of it
         are kept too, so arrivals and departures reach the airport. Aircraft
         within `overhead_m` of the house, and below `overhead_alt_ft` if it is
-        set, are overhead. The page can ask for another radius."""
+        set, are overhead. The page's radius slider changes `overhead_m`."""
         self.db = db
         self.home = home
         self.source_url = source_url
@@ -162,10 +162,9 @@ class Collector:
         self.nearby = sorted(nearby, key=lambda e: e["distance_m"])
         self.aircraft_seen = len(data.get("aircraft", []))
 
-    def overhead(self, radius_m=None):
-        """The aircraft within `radius_m` (default `overhead_m`), nearest first."""
-        r = self.overhead_m if radius_m is None else radius_m
-        return [e for e in self.nearby if e["distance_m"] <= r]
+    def overhead(self):
+        """The aircraft within `overhead_m`, nearest first."""
+        return [e for e in self.nearby if e["distance_m"] <= self.overhead_m]
 
     @staticmethod
     def _overhead_entry(ac, hex_, flight, lat, lon, alt, dist):

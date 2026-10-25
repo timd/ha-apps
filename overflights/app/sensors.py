@@ -131,7 +131,8 @@ class Sensors:
         Altitude and speed are rounded, so noise in them publishes nothing.
         """
         now = self.overhead()
-        attrs = {"aircraft": [a["callsign"] or a["hex"].upper() for a in now]}
+        attrs = {"radius_km": round(self.collector.overhead_m / 1000, 1),
+                 "aircraft": [a["callsign"] or a["hex"].upper() for a in now]}
         if now:
             a = now[0]
             o, d = a.get("origin"), a.get("destination")

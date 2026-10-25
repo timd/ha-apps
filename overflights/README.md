@@ -40,9 +40,9 @@ All settings are on the App's **Configuration** tab.
    house, for example `EDDB` or `BER`. The App then finds arrivals and
    departures for that airport, and traces them to its runways on the map.
 3. **Overhead radius** and **Overhead altitude limit**: what counts as
-   overhead for the sensors, and the page's starting filters. **Overhead now
-   radius** sets the area of the Overhead sensor. The page's live Overhead
-   now card follows the page's radius slider. You can leave
+   overhead for the sensors, and the page's starting filters. The page's
+   radius slider sets the area of the live Overhead now card and the
+   Overhead sensor. You can leave
    them at first and set them after a week, from the "How close they come"
    chart.
 4. Select **Save**, then go to the **Info** tab and select **Start**. Check

@@ -679,14 +679,19 @@ function renderNow(data) {
   }
 }
 
-// The card uses the page's radius slider.
+// The radius slider is shared: the App keeps its value, and the Overhead
+// sensor uses it. A page follows a change made in another browser.
 let nowSeq = 0;
 async function pollNow() {
   if (expired) return;
   const seq = ++nowSeq;
   try {
-    const data = await getJSON("api/now?radius=" + Math.round(radiusM()));
-    if (seq === nowSeq) renderNow(data);
+    const data = await getJSON("api/now");
+    if (seq !== nowSeq) return;
+    if (!radiusTimer && Math.abs(data.radius_m - radiusM()) >= 1) {
+      showRadius(data.radius_m);
+    }
+    renderNow(data);
   } catch (err) {
     $("#now").replaceChildren(el("p", { class: "muted", text: problem(err) }));
     if (err.status === 401) { expired = true; stopPolling(); }
@@ -757,18 +762,35 @@ async function reload() {
   }
 }
 
-let trackTimer;
+let trackTimer, radiusTimer = null;
 function setRadius(kmValue) {
   $("#radius").value = kmValue;
   onRadius();
 }
-function onRadius() {
+// Redraw the page for the slider's radius.
+function showRadius(m) {
+  if (m !== undefined) $("#radius").value = m / 1000;
   $("#radius-out").textContent = km(radiusM());
-  saved.set("radius", $("#radius").value);
   renderAll();
-  pollNow();
   clearTimeout(trackTimer);
   trackTimer = setTimeout(() => loadTracks().catch((err) => { $("#status").textContent = problem(err); }), 350);
+}
+// The viewer moved the slider. Send the new radius to the App once the
+// slider stops, then refresh the Overhead now card.
+function onRadius() {
+  showRadius();
+  clearTimeout(radiusTimer);
+  radiusTimer = setTimeout(async () => {
+    try {
+      const r = await fetch("api/radius", { method: "POST", headers: { "Content-Type": "application/json" },
+                                             body: JSON.stringify({ radius_m: Math.round(radiusM()) }) });
+      if (!r.ok) throw Object.assign(new Error(`api/radius: HTTP ${r.status}`), { status: r.status });
+    } catch (err) {
+      $("#status").textContent = problem(err);
+    }
+    radiusTimer = null;
+    pollNow();
+  }, 400);
 }
 
 function renderStatus() {
@@ -787,7 +809,7 @@ async function main() {
   state.info = await getJSON("api/info");
   const r = $("#radius");
   r.max = state.info.capture_radius_m / 1000;
-  r.value = saved.get("radius") || state.info.default_radius_m / 1000;
+  r.value = state.info.radius_m / 1000;
   if (saved.get("period")) $("#period").value = saved.get("period");
   const alt = saved.get("max_alt") ?? (state.info.default_max_alt_ft ? String(state.info.default_max_alt_ft) : "");
   $("#max-alt").value = alt;
