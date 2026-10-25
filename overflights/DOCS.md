@@ -111,7 +111,7 @@ When nothing is within the radius, the card's title changes to **Last
 overhead**, and it shows the latest aircraft whose closest point came within
 the radius: the time, the distance and altitude at the closest point, the
 class, and the same details from adsbdb. The map draws its path in bright
-yellow.
+yellow. Click **Last overhead** in the map legend to hide or show it.
 
 The radius slider is shared. The App keeps its value, so every browser opens
 with it, and an open page follows a change made in another browser. Moving

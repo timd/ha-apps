@@ -494,6 +494,15 @@ let map, density, radiusCircle;
 // Classes that the map does not draw. The viewer toggles them in the legend.
 const hiddenKinds = new Set((saved.get("hidden") || "").split(",").filter((k) => k in KIND));
 
+// The viewer can hide the yellow path of the last overhead aircraft too.
+let showLast = saved.get("hide_last") !== "1";
+function toggleLast() {
+  showLast = !showLast;
+  saved.set("hide_last", showLast ? "0" : "1");
+  if (state.nowData) renderNow(state.nowData);
+  renderMapLegend();
+}
+
 function toggleKind(kind) {
   if (hiddenKinds.has(kind)) hiddenKinds.delete(kind); else hiddenKinds.add(kind);
   saved.set("hidden", [...hiddenKinds].join(","));
@@ -540,6 +549,13 @@ function renderMapLegend() {
     el("span", { class: "swatch", style: `background: ${kindColor(k.id)}` }, item);
     item.append(`${k.plural} ${fmt.format(counts[k.id])}`);
     item.addEventListener("click", () => toggleKind(k.id));
+  }
+  if (state.hasLast) {
+    const item = el("button", { type: "button", class: "key", "aria-pressed": String(showLast),
+                                title: `${showLast ? "Hide" : "Show"} the last overhead aircraft's path on the map` }, box);
+    el("span", { class: "swatch", style: `background: ${css("--last")}` }, item);
+    item.append("Last overhead");
+    item.addEventListener("click", toggleLast);
   }
   let linked = false;
   for (const t of state.tracks.values()) if (t.link && !hiddenKinds.has(t.kind)) { linked = true; break; }
@@ -642,6 +658,7 @@ function ago(ts, now) {
 // The card shows the aircraft overhead now. When there are none, it shows
 // the last aircraft that came within the radius.
 function renderNow(data) {
+  state.nowData = data;
   const box = $("#now");
   box.replaceChildren();
   nowLayer.clearLayers();
@@ -662,6 +679,12 @@ function renderNow(data) {
     el("p", { class: "muted", text: `Nothing overhead. Aircraft show here while they are ${area}.` }, box);
   }
   for (const src of photos.keys()) if (!usedPhotos.has(src)) photos.delete(src);
+  // The legend has a key for the yellow path only while there is one.
+  const hasLast = !live && !!data.last;
+  if (hasLast !== state.hasLast) {
+    state.hasLast = hasLast;
+    renderMapLegend();
+  }
 }
 
 // The card is rebuilt every 5 seconds. It keeps each photo's element, so a
@@ -704,12 +727,12 @@ function planeRow(box, a, past, now) {
     el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(a.hex)}` + (past ? `&showTrace=${day}` : ""),
               target: "_blank", rel: "noopener", text: past ? "Trace" : "Live track" }, figures);
   }
-  if (past) {
+  if (past && showLast) {
     // The last overflight's path, in yellow over a dark edge so that it
     // stands out on the grey map in both themes.
     L.polyline(a.track, { color: "#000", opacity: 0.45, weight: 7, interactive: false }).addTo(nowLayer);
     L.polyline(a.track, { color: css("--last"), weight: 4, interactive: false }).addTo(nowLayer);
-  } else {
+  } else if (!past) {
     L.circleMarker([a.lat, a.lon], { radius: 6, color: css("--surface"), weight: 2, fillColor: css("--text"),
                                      fillOpacity: 1, interactive: false })
       .bindTooltip(name, { permanent: true, direction: "right", offset: [8, 0], className: "plane-label" })

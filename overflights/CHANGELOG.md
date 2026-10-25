@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.3
+
+- The map legend has a **Last overhead** key while the yellow path shows.
+  Click it to hide or show the path, as with the other classes. The browser
+  remembers the choice.
+
 ## 0.9.2
 
 - The map draws the Last overhead aircraft's path in bright yellow, instead
