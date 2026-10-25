@@ -127,6 +127,33 @@ def overhead_now(state):
     return out
 
 
+def last_overhead(state):
+    """The latest pass whose closest point was within the overhead radius and
+    below the altitude limit, with what adsbdb knows of it, or None."""
+    c = state["collector"]
+    where = "p.min_dist_m <= :r AND p.hex NOT LIKE :demo"
+    if c.overhead_alt_ft:
+        where += " AND p.min_alt_ft <= :alt"
+    db = state["db"]
+    row = db.execute(
+        f"""SELECT p.id, p.hex, p.flight, p.min_ts, p.min_dist_m, p.min_alt_ft, {COLUMNS}
+            FROM passes p {JOINS} WHERE {where} ORDER BY p.min_ts DESC LIMIT 1""",
+        {"r": c.overhead_m, "alt": c.overhead_alt_ft, "demo": demo.DEMO_PREFIX + "%"},
+    ).fetchone()
+    if not row:
+        return None
+    pid, hex_, flight, ts, dist, alt = row[:6]
+    # The stored position nearest the closest point.
+    lat, lon = (v / 1e5 for v in db.execute(
+        "SELECT lat_e5, lon_e5 FROM positions WHERE pass_id = ? ORDER BY abs(ts - ?) LIMIT 1",
+        (pid, ts)).fetchone())
+    entry = {"pass_id": pid, "hex": hex_, "callsign": flight, "ts": ts, "distance_m": dist,
+             "altitude_ft": alt, "lat": lat, "lon": lon, "kind": state["classify"](*row[6:])}
+    if state["lookup"]:
+        entry.update(state["lookup"].details(hex_, flight, lat, lon))
+    return entry
+
+
 def parse_runways(entries):
     """Read each runway as "lat,lon,lat,lon", the two ends. Skip bad entries."""
     runways = []
@@ -186,13 +213,17 @@ def make_app(state):
 
     @routes.get("/api/now")
     async def now(_request):
+        """The aircraft overhead now. If there are none, `last` is the latest
+        aircraft that was."""
         c = state["collector"]
+        aircraft = overhead_now(state)
         return web.json_response({
             "radius_m": round(c.overhead_m),
             "max_alt_ft": c.overhead_alt_ft,
             "lookup": state["lookup"] is not None,
             "receiving": c.last_error is None and c.last_ok is not None,
-            "aircraft": overhead_now(state),
+            "aircraft": aircraft,
+            "last": None if aircraft else last_overhead(state),
             "now": time.time(),
         })
 

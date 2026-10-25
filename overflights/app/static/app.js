@@ -630,53 +630,75 @@ function vertical(fpm) {
   return `${fpm > 0 ? "climbing" : "descending"} ${fmt.format(Math.abs(Math.round(fpm / 100) * 100))} ft/min`;
 }
 
+// How long ago, in words: "3 min ago", "2 h 5 min ago", "yesterday 18:40".
+function ago(ts, now) {
+  const min = Math.max(0, Math.round((now - ts) / 60));
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  if (min < 24 * 60) return `${Math.floor(min / 60)} h ${min % 60} min ago`;
+  return `${dateFmt.format(ts * 1000)} ${timeFmt.format(ts * 1000)}`;
+}
+
+// The card shows the aircraft overhead now. When there are none, it shows
+// the last aircraft that came within the radius.
 function renderNow(data) {
   const box = $("#now");
   box.replaceChildren();
   nowLayer.clearLayers();
   const area = `within ${km(data.radius_m)} of the house` +
     (data.max_alt_ft ? ` and below ${ft(data.max_alt_ft)}` : "");
+  const live = data.receiving && data.aircraft.length > 0;
+  $("#now-title").textContent = live || !data.last ? "Overhead now" : "Last overhead";
   if (!data.receiving) {
     el("p", { class: "muted", text: "The App is not receiving from the ADS-B receiver." }, box);
-    return;
   }
-  if (!data.aircraft.length) {
+  if (live) {
+    for (const a of data.aircraft) planeRow(box, a, false);
+  } else if (data.last) {
+    el("p", { class: "muted", text: `Nothing ${area} now. The last aircraft that was:` }, box);
+    planeRow(box, data.last, true, data.now);
+  } else if (data.receiving) {
     el("p", { class: "muted", text: `Nothing overhead. Aircraft show here while they are ${area}.` }, box);
-    return;
   }
-  for (const a of data.aircraft) {
-    const name = a.callsign || a.hex.toUpperCase();
-    const row = el("div", { class: "plane" }, box);
-    if (a.photo) {
-      el("img", { src: a.photo, alt: `Photo of ${a.registration || name}`, loading: "lazy",
-                  referrerpolicy: "no-referrer" }, row);
-    }
-    const text = el("div", {}, row);
-    const who = el("div", { class: "who", text: name }, text);
-    if (a.registration && a.registration !== name) el("span", { class: "reg", text: a.registration }, who);
-    const what = [a.airline || a.owner, a.type].filter(Boolean).join(" · ");
-    if (what) el("div", { class: "line", text: what }, text);
-    if (a.origin && a.destination) {
-      const route = el("div", { class: "line", text: `${airportLabel(a.origin)} → ${airportLabel(a.destination)}` }, text);
-      if (a.route_plausible === false) {
-        el("div", { class: "route-doubt", text: "adsbdb.com gives this route, but it does not fit the aircraft's position, so it may be out of date." }, text);
-        route.title = "The route may be out of date";
-      }
-    }
-    const figures = el("div", { class: "figures" }, text);
-    for (const f of [ft(a.altitude_ft), vertical(a.vertical_fpm), a.speed_kt != null && `${fmt.format(a.speed_kt)} kt`,
-                     `${km(a.distance_m)} away`]) {
-      if (f) el("span", { text: f }, figures);
-    }
-    if (!a.hex.startsWith("~")) {
-      el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(a.hex)}`, target: "_blank",
-                rel: "noopener", text: "Live track" }, figures);
-    }
-    L.circleMarker([a.lat, a.lon], { radius: 6, color: css("--surface"), weight: 2, fillColor: css("--text"),
-                                     fillOpacity: 1, interactive: false })
-      .bindTooltip(name, { permanent: true, direction: "right", offset: [8, 0], className: "plane-label" })
-      .addTo(nowLayer);
+}
+
+// One aircraft. `past` is a logged pass, with figures for its closest point.
+function planeRow(box, a, past, now) {
+  const name = a.callsign || a.hex.toUpperCase();
+  const row = el("div", { class: "plane" }, box);
+  if (a.photo) {
+    el("img", { src: a.photo, alt: `Photo of ${a.registration || name}`, loading: "lazy",
+                referrerpolicy: "no-referrer" }, row);
   }
+  const text = el("div", {}, row);
+  const who = el("div", { class: "who", text: name }, text);
+  if (a.registration && a.registration !== name) el("span", { class: "reg", text: a.registration }, who);
+  const what = [a.airline || a.owner, a.type].filter(Boolean).join(" · ");
+  if (what) el("div", { class: "line", text: what }, text);
+  if (a.origin && a.destination) {
+    const route = el("div", { class: "line", text: `${airportLabel(a.origin)} → ${airportLabel(a.destination)}` }, text);
+    if (a.route_plausible === false) {
+      el("div", { class: "route-doubt", text: "adsbdb.com gives this route, but it does not fit the aircraft's position, so it may be out of date." }, text);
+      route.title = "The route may be out of date";
+    }
+  }
+  const figures = el("div", { class: "figures" }, text);
+  const shown = past
+    ? [`${timeFmt.format(a.ts * 1000)}, ${ago(a.ts, now)}`, `closest ${km(a.distance_m)}`,
+       `at ${ft(a.altitude_ft)}`, KIND[a.kind].label]
+    : [ft(a.altitude_ft), vertical(a.vertical_fpm), a.speed_kt != null && `${fmt.format(a.speed_kt)} kt`,
+       `${km(a.distance_m)} away`];
+  for (const f of shown) if (f) el("span", { text: f }, figures);
+  if (!a.hex.startsWith("~") && !a.hex.startsWith("zz")) {
+    const day = new Date((past ? a.ts : now || Date.now() / 1000) * 1000).toISOString().slice(0, 10);
+    el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(a.hex)}` + (past ? `&showTrace=${day}` : ""),
+              target: "_blank", rel: "noopener", text: past ? "Trace" : "Live track" }, figures);
+  }
+  // A logged pass is marked at its closest point, as a hollow ring.
+  L.circleMarker([a.lat, a.lon], { radius: 6, color: past ? css("--text") : css("--surface"), weight: 2,
+                                   fillColor: css("--text"), fillOpacity: past ? 0 : 1, interactive: false })
+    .bindTooltip(name, { permanent: true, direction: "right", offset: [8, 0], className: "plane-label" })
+    .addTo(nowLayer);
 }
 
 // The radius slider is shared: the App keeps its value, and the Overhead

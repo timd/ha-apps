@@ -107,6 +107,12 @@ nearest first: those within the page's radius of the house, and below
 `default_max_altitude_ft`. `sensor.overflights_overhead` uses the same
 radius.
 
+When nothing is within the radius, the card's title changes to **Last
+overhead**, and it shows the latest aircraft whose closest point came within
+the radius: the time, the distance and altitude at the closest point, the
+class, and the same details from adsbdb. The map marks that closest point
+with a ring.
+
 The radius slider is shared. The App keeps its value, so every browser opens
 with it, and an open page follows a change made in another browser. Moving
 the slider also changes the Overhead sensor. Until someone moves the slider,

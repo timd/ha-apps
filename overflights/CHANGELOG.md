@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1
+
+- When no aircraft is within the radius, the Overhead now card becomes
+  **Last overhead**. It shows the latest aircraft whose closest point came
+  within the radius: when, how close and how high, its class, and the same
+  details as a live aircraft. The map marks its closest point with a ring.
+
 ## 0.9.0
 
 - The page's radius slider is shared. The App keeps its value, every browser
