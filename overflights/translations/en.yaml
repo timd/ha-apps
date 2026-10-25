@@ -47,8 +47,8 @@ configuration:
   default_radius_km:
     name: Overhead radius (km)
     description: >-
-      What counts as overhead. The page starts with this radius, the sensors use it,
-      and the Overhead now card shows the aircraft inside it.
+      What counts as overhead. The page starts with this radius, and the sensors
+      count the overflights inside it.
   default_max_altitude_ft:
     name: Overhead altitude limit (ft)
     description: The page and the sensors count only aircraft below this altitude. 0 means any altitude.
@@ -57,6 +57,11 @@ configuration:
     description: >-
       Adds 60 days of made-up passes built from the receiver's last hour of tracks.
       Turn it off and restart to delete them. Sensors never count them.
+  now_radius_km:
+    name: Overhead now radius (km)
+    description: >-
+      The Overhead now card and the Overhead sensor show the aircraft within
+      this distance of the house, and below the overhead altitude limit.
   online_lookup:
     name: Look up aircraft online
     description: >-

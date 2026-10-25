@@ -275,8 +275,9 @@ async def main():
         log.info("Arrivals and departures are checked against the airport at %.4f,%.4f", *airport)
     airport_m = opts.get("airport_radius_km", 25) * 1000
     overhead_m = min(opts["default_radius_km"] * 1000, capture_m)
+    now_m = min(opts.get("now_radius_km", 1) * 1000, capture_m)
     collector = Collector(db, home, base + "/aircraft.json", capture_m, opts["poll_seconds"],
-                          airport, airport_m, overhead_m, opts.get("default_max_altitude_ft"))
+                          airport, airport_m, now_m, opts.get("default_max_altitude_ft"))
     lookup = Lookup(db) if opts.get("online_lookup", True) else None
     state = {"db_path": db_path, "home": home, "collector": collector, "options": opts, "lookup": lookup,
              "capture_m": capture_m, "airport": airport, "airport_m": airport_m,

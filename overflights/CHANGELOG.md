@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+- The new option `now_radius_km` (1 km) sets the area of the Overhead now
+  card and `sensor.overflights_overhead`. Before, they used
+  `default_radius_km`, which still sets the overflight counts.
+
 ## 0.8.0
 
 - An **Overhead now** card at the top of the page shows each aircraft inside
