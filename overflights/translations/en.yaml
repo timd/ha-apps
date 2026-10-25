@@ -46,7 +46,9 @@ configuration:
     description: Passes older than this are deleted.
   default_radius_km:
     name: Overhead radius (km)
-    description: What counts as overhead. The page starts with this radius, and the sensors use it.
+    description: >-
+      What counts as overhead. The page starts with this radius, the sensors use it,
+      and the Overhead now card shows the aircraft inside it.
   default_max_altitude_ft:
     name: Overhead altitude limit (ft)
     description: The page and the sensors count only aircraft below this altitude. 0 means any altitude.
@@ -55,6 +57,11 @@ configuration:
     description: >-
       Adds 60 days of made-up passes built from the receiver's last hour of tracks.
       Turn it off and restart to delete them. Sensors never count them.
+  online_lookup:
+    name: Look up aircraft online
+    description: >-
+      Ask adsbdb.com for the registration, type, airline and route of each
+      aircraft overhead. The App asks once for each aircraft and callsign.
   tile_url:
     name: Map tile URL
     description: >-

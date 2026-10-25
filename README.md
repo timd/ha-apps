@@ -22,8 +22,10 @@ closest approach to the house, and gives you:
 - a map of where the aircraft fly, coloured by class, with arrivals and
   departures traced to the runway;
 - a table of the latest overflights;
+- a live card of the aircraft overhead now, with registration, type, airline
+  and route from adsbdb.com;
 - Home Assistant sensors over MQTT: overflights today, the last overflight,
-  and whether the receiver is online.
+  the aircraft overhead now, and whether the receiver is online.
 
 The page opens from the Home Assistant sidebar. [DOCS.md](overflights/DOCS.md)
 describes the options.

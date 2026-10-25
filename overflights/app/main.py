@@ -16,6 +16,7 @@ import airports
 import demo
 import store
 import tiles
+from lookup import Lookup
 from classify import COLUMNS, JOINS, KINDS, Classifier
 from sensors import Sensors
 from collector import PASS_GAP_S, Collector
@@ -113,6 +114,17 @@ def read_tracks(db_path, classify, where, args, kinds):
         db.close()
 
 
+def overhead_now(state):
+    """The aircraft overhead now, nearest first, with what adsbdb knows of them."""
+    out = []
+    for entry in state["collector"].overhead:
+        entry = dict(entry)
+        if state["lookup"]:
+            entry.update(state["lookup"].details(entry["hex"], entry["callsign"], entry["lat"], entry["lon"]))
+        out.append(entry)
+    return out
+
+
 def parse_runways(entries):
     """Read each runway as "lat,lon,lat,lon", the two ends. Skip bad entries."""
     runways = []
@@ -170,6 +182,18 @@ def make_app(state):
             "now": time.time(),
         })
 
+    @routes.get("/api/now")
+    async def now(_request):
+        c = state["collector"]
+        return web.json_response({
+            "radius_m": c.overhead_m,
+            "max_alt_ft": c.overhead_alt_ft,
+            "lookup": state["lookup"] is not None,
+            "receiving": c.last_error is None and c.last_ok is not None,
+            "aircraft": overhead_now(state),
+            "now": time.time(),
+        })
+
     @routes.get("/api/passes")
     async def passes(request):
         rows = await asyncio.to_thread(read_passes, state["db_path"], state["classify"],
@@ -195,11 +219,13 @@ def make_app(state):
     return app
 
 
-async def prune_loop(db, days, capture_m, tile_cache):
+async def prune_loop(db, days, capture_m, tile_cache, lookup):
     while True:
         n = await asyncio.to_thread(tile_cache.prune)
         if n:
             log.info("Deleted %d old map tiles", n)
+        if lookup:
+            lookup.prune()
         n = store.prune(db, int(time.time()) - days * 86400)
         if n:
             log.info("Deleted %d passes older than %d days", n, days)
@@ -248,9 +274,11 @@ async def main():
     if airport:
         log.info("Arrivals and departures are checked against the airport at %.4f,%.4f", *airport)
     airport_m = opts.get("airport_radius_km", 25) * 1000
+    overhead_m = min(opts["default_radius_km"] * 1000, capture_m)
     collector = Collector(db, home, base + "/aircraft.json", capture_m, opts["poll_seconds"],
-                          airport, airport_m)
-    state = {"db_path": db_path, "home": home, "collector": collector, "options": opts,
+                          airport, airport_m, overhead_m, opts.get("default_max_altitude_ft"))
+    lookup = Lookup(db) if opts.get("online_lookup", True) else None
+    state = {"db_path": db_path, "home": home, "collector": collector, "options": opts, "lookup": lookup,
              "capture_m": capture_m, "airport": airport, "airport_m": airport_m,
              "runways": runways, "classify": Classifier(home, airport),
              "tiles": tiles.TileCache(DATA_DIR / "tiles", opts.get("tile_url") or DEFAULT_TILE_URL)}
@@ -264,14 +292,14 @@ async def main():
     await demo.apply(opts.get("demo_data", False), demo_db, db_path, home, base,
                      opts["capture_radius_km"] * 1000)
     demo_db.close()
-    sensors = Sensors(db_path, collector, state["classify"], min(opts["default_radius_km"] * 1000, capture_m),
-                      opts.get("default_max_altitude_ft"))
+    sensors = Sensors(db_path, collector, state["classify"], overhead_m,
+                      opts.get("default_max_altitude_ft"), lambda: overhead_now(state))
     # The App runs as PID 1, which ignores SIGTERM unless it handles it. Without
     # this, the Supervisor waits 10 seconds at each stop and then kills the App.
     stop = asyncio.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         asyncio.get_running_loop().add_signal_handler(sig, stop.set)
-    work = asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"], capture_m, state["tiles"]), sensors.run())
+    work = asyncio.gather(collector.run(), prune_loop(db, opts["retention_days"], capture_m, state["tiles"], lookup), sensors.run())
     stopped = asyncio.ensure_future(stop.wait())
     await asyncio.wait([work, stopped], return_when=asyncio.FIRST_COMPLETED)
     if work.done():
@@ -281,6 +309,8 @@ async def main():
     await asyncio.gather(work, return_exceptions=True)
     await runner.cleanup()
     await state["tiles"].close()
+    if lookup:
+        await lookup.close()
     db.close()
 
 

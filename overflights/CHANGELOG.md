@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.0
+
+- An **Overhead now** card at the top of the page shows each aircraft inside
+  the overhead radius and below the overhead altitude limit: its callsign,
+  registration, operator, type, route, photo, altitude and speed. The map
+  marks each one. The card updates every 5 seconds.
+- The App looks up registration, type, operator, route and photo at
+  adsbdb.com, once for each aircraft and callsign. If the route does not fit
+  the aircraft's position, the card says that it may be out of date. The new
+  `online_lookup` option turns the lookups off.
+- A new sensor, `sensor.overflights_overhead`, counts the aircraft overhead.
+  Its attributes describe the nearest one. The sensors now update every
+  5 seconds instead of 15.
+
 ## 0.7.4
 
 - The App fetches the map tiles, keeps them for 30 days, and serves them to

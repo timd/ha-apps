@@ -40,9 +40,12 @@ class PassState:
 
 
 class Collector:
-    def __init__(self, db, home, source_url, capture_m, poll_s, airport=None, airport_m=0):
+    def __init__(self, db, home, source_url, capture_m, poll_s, airport=None, airport_m=0,
+                 overhead_m=0, overhead_alt_ft=None):
         """`airport` is (lat, lon) or None. Positions within `airport_m` of it
-        are kept too, so arrivals and departures reach the airport."""
+        are kept too, so arrivals and departures reach the airport. Aircraft
+        within `overhead_m` of the house, and below `overhead_alt_ft` if it is
+        set, are overhead."""
         self.db = db
         self.home = home
         self.source_url = source_url
@@ -54,6 +57,9 @@ class Collector:
         self.last_ok = None
         self.last_error = None
         self.aircraft_seen = 0
+        self.overhead_m = overhead_m
+        self.overhead_alt_ft = overhead_alt_ft or None
+        self.overhead = []
         self._load_open()
 
     def _load_open(self):
@@ -82,6 +88,7 @@ class Collector:
         now = data.get("now") or time.time()
         positions = []
         updates = []
+        overhead = []
         for ac in data.get("aircraft", []):
             lat, lon = ac.get("lat"), ac.get("lon")
             if lat is None or lon is None:
@@ -98,6 +105,9 @@ class Collector:
             ts = int(round(now - seen_pos))
             alt = altitude_ft(ac)
             flight = (ac.get("flight") or "").strip() or None
+            if dist <= self.overhead_m and (self.overhead_alt_ft is None
+                                            or (alt is not None and alt <= self.overhead_alt_ft)):
+                overhead.append(self._overhead_entry(ac, hex_, flight, lat, lon, alt, dist))
             st = self.open.get(hex_)
             if st is not None and ts <= st.last_ts:
                 continue
@@ -145,7 +155,24 @@ class Collector:
 
         for hex_ in [h for h, st in self.open.items() if now - st.last_ts > PASS_GAP_S]:
             del self.open[hex_]
+        for entry in overhead:
+            st = self.open.get(entry["hex"])
+            entry["pass_id"] = st.id if st else None
+            entry["callsign"] = entry["callsign"] or (st.flight if st else None)
+        self.overhead = sorted(overhead, key=lambda e: e["distance_m"])
         self.aircraft_seen = len(data.get("aircraft", []))
+
+    @staticmethod
+    def _overhead_entry(ac, hex_, flight, lat, lon, alt, dist):
+        rate = ac.get("baro_rate", ac.get("geom_rate"))
+        return {
+            "hex": hex_, "callsign": flight, "lat": lat, "lon": lon, "altitude_ft": alt,
+            "distance_m": round(dist),
+            "speed_kt": round(ac["gs"]) if isinstance(ac.get("gs"), (int, float)) else None,
+            "track": ac.get("track"),
+            "vertical_fpm": rate if isinstance(rate, (int, float)) else None,
+            "squawk": ac.get("squawk"), "category": ac.get("category"),
+        }
 
     def _near_airport(self, x, y):
         return self.airport is not None and math.dist((x, y), self.airport) <= self.airport_m
@@ -164,6 +191,7 @@ class Collector:
                         log.info("Receiver reachable again")
                     self.last_ok, self.last_error = time.time(), None
                 except Exception as err:  # keep polling whatever goes wrong
+                    self.overhead = []
                     if str(err) != self.last_error:
                         log.warning("Poll failed: %s", err)
                     self.last_error = str(err)

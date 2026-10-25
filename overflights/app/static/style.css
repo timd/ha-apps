@@ -144,6 +144,19 @@ th:first-child, td:first-child { text-align: left; }
 }
 a { color: var(--series-1); }
 
+.now { margin-top: 16px; }
+.now .muted:last-child { margin-bottom: 0; }
+.plane { display: flex; gap: 14px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--grid); }
+.plane:first-of-type { border-top: 0; padding-top: 4px; }
+.plane img { width: 120px; height: 80px; object-fit: cover; border-radius: 6px; flex: none; background: var(--empty); }
+.plane .who { font-size: 20px; font-weight: 600; }
+.plane .who .reg { color: var(--text-2); font-size: 14px; font-weight: 400; margin-left: 8px; }
+.plane .line { color: var(--text-2); }
+.plane .route-doubt { color: var(--muted); font-size: 12px; }
+.plane .figures { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) { .plane img { width: 84px; height: 56px; } }
+.leaflet-tooltip.plane-label { font-weight: 600; }
+
 #tooltip {
   position: fixed; z-index: 1000; pointer-events: none;
   background: var(--surface); color: var(--text-2);

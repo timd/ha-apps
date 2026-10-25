@@ -94,10 +94,30 @@ is only a view filter, so you can change it at any time without losing data.
 | `capture_radius_km` | Positions further away are not stored, except near the airport. Only aircraft that come this close are passes. |
 | `poll_seconds` | How often the App reads the receiver. |
 | `retention_days` | Passes older than this are deleted. |
-| `default_radius_km` | What counts as overhead: the page's radius until a viewer changes it, and the radius for the sensors. |
+| `default_radius_km` | What counts as overhead: the page's radius until a viewer changes it, the radius for the sensors, and the area of the Overhead now card. |
 | `default_max_altitude_ft` | The altitude limit for the page and the sensors. 0 means any altitude. |
+| `online_lookup` | Look up the registration, type, operator and route of each aircraft overhead at adsbdb.com. |
 | `demo_data` | Adds 60 days of demo passes, made from the receiver's last hour of real tracks. Turn it off to delete them. |
 | `tile_url` | Optional. The map's tile server, with `{z}`, `{x}` and `{y}`. Empty means `https://tile.openstreetmap.de/{z}/{x}/{y}.png`. |
+
+## Overhead now
+
+The card at the top of the page lists the aircraft that are overhead now,
+nearest first. An aircraft is overhead while it is within
+`default_radius_km` of the house and below `default_max_altitude_ft`. The
+map marks each one with its callsign. The card updates every 5 seconds.
+
+The receiver gives only the aircraft's address, callsign, position, altitude
+and speed. If `online_lookup` is on, the App asks
+[adsbdb.com](https://www.adsbdb.com/) for the registration, type, owner and
+photo of each aircraft, and for the airline and route of each callsign. It
+asks once for each aircraft (kept for 30 days) and each callsign (kept for a
+day), and only about aircraft overhead. The first time, the details appear a
+few seconds after the aircraft.
+
+adsbdb takes routes from schedules, so a route can be years out of date. If
+the aircraft is far off the line from origin to destination, the card says
+so. Aircraft that send no position, such as many light aircraft, never show.
 
 ## Map tiles
 
@@ -113,14 +133,15 @@ server that refused. Set `tile_url` to another server.
 ## Sensors
 
 If Home Assistant has an MQTT broker, such as the Mosquitto app, the App adds
-a device called Overflights with three entities. They count only passes within
+a device called Overflights with four entities. They count only aircraft within
 `default_radius_km` and below `default_max_altitude_ft`. Demo passes never
-count.
+count. The App publishes a change within 5 seconds.
 
 | Entity | State |
 | --- | --- |
 | `sensor.overflights_today` | Overflights since midnight. Long-term statistics keep the daily totals. |
 | `sensor.overflights_last` | Callsign of the latest overflight. Attributes: time, distance, altitude, hex, kind (arrival, departure, transit or unknown). |
+| `sensor.overflights_overhead` | The number of aircraft overhead now. Attributes describe the nearest: callsign, hex, registration, type, icao_type, operator, origin, origin_name, destination, destination_name, route_plausible, altitude_ft, distance_km, speed_kt, photo. `aircraft` lists the callsigns of all of them. |
 | `binary_sensor.overflights_receiver` | Off when the App has not read the receiver for 2 minutes. |
 
 ## Storage

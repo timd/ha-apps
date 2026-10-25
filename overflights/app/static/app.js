@@ -517,6 +517,7 @@ function setupMap() {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   density = new DensityLayer().addTo(map);
+  nowLayer = L.layerGroup().addTo(map);
   density.setHidden(hiddenKinds);
   radiusCircle = L.circle(home, { radius: radiusM(), color: css("--text-2"), weight: 1.5,
                                   dashArray: "5 4", fill: false, interactive: false }).addTo(map);
@@ -615,6 +616,76 @@ function renderLatest() {
   }
   if (!rows.length) {
     el("td", { colspan: 6, class: "empty-note", text: `No overflights ${period}.` }, el("tr", {}, body));
+  }
+}
+
+// ---------- overhead now ----------
+
+let nowLayer;
+function airportLabel(a) { return a.city && a.code ? `${a.code} ${a.city}` : a.code || a.name || "?"; }
+
+function vertical(fpm) {
+  if (fpm == null) return null;
+  if (Math.abs(fpm) < 300) return "level";
+  return `${fpm > 0 ? "climbing" : "descending"} ${fmt.format(Math.abs(Math.round(fpm / 100) * 100))} ft/min`;
+}
+
+function renderNow(data) {
+  const box = $("#now");
+  box.replaceChildren();
+  nowLayer.clearLayers();
+  const area = `within ${km(data.radius_m)} of the house` +
+    (data.max_alt_ft ? ` and below ${ft(data.max_alt_ft)}` : "");
+  if (!data.receiving) {
+    el("p", { class: "muted", text: "The App is not receiving from the ADS-B receiver." }, box);
+    return;
+  }
+  if (!data.aircraft.length) {
+    el("p", { class: "muted", text: `Nothing overhead. Aircraft show here while they are ${area}.` }, box);
+    return;
+  }
+  for (const a of data.aircraft) {
+    const name = a.callsign || a.hex.toUpperCase();
+    const row = el("div", { class: "plane" }, box);
+    if (a.photo) {
+      el("img", { src: a.photo, alt: `Photo of ${a.registration || name}`, loading: "lazy",
+                  referrerpolicy: "no-referrer" }, row);
+    }
+    const text = el("div", {}, row);
+    const who = el("div", { class: "who", text: name }, text);
+    if (a.registration && a.registration !== name) el("span", { class: "reg", text: a.registration }, who);
+    const what = [a.airline || a.owner, a.type].filter(Boolean).join(" · ");
+    if (what) el("div", { class: "line", text: what }, text);
+    if (a.origin && a.destination) {
+      const route = el("div", { class: "line", text: `${airportLabel(a.origin)} → ${airportLabel(a.destination)}` }, text);
+      if (a.route_plausible === false) {
+        el("div", { class: "route-doubt", text: "adsbdb.com gives this route, but it does not fit the aircraft's position, so it may be out of date." }, text);
+        route.title = "The route may be out of date";
+      }
+    }
+    const figures = el("div", { class: "figures" }, text);
+    for (const f of [ft(a.altitude_ft), vertical(a.vertical_fpm), a.speed_kt != null && `${fmt.format(a.speed_kt)} kt`,
+                     `${km(a.distance_m)} away`]) {
+      if (f) el("span", { text: f }, figures);
+    }
+    if (!a.hex.startsWith("~")) {
+      el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(a.hex)}`, target: "_blank",
+                rel: "noopener", text: "Live track" }, figures);
+    }
+    L.circleMarker([a.lat, a.lon], { radius: 6, color: css("--surface"), weight: 2, fillColor: css("--text"),
+                                     fillOpacity: 1, interactive: false })
+      .bindTooltip(name, { permanent: true, direction: "right", offset: [8, 0], className: "plane-label" })
+      .addTo(nowLayer);
+  }
+}
+
+async function pollNow() {
+  if (expired) return;
+  try {
+    renderNow(await getJSON("api/now"));
+  } catch (err) {
+    $("#now").replaceChildren(el("p", { class: "muted", text: problem(err) }));
+    if (err.status === 401) { expired = true; stopPolling(); }
   }
 }
 
@@ -743,14 +814,15 @@ async function main() {
   });
 
   await reload();
+  pollNow();
   startPolling();
   // A hidden tab does not poll, so a sleeping tab sends no requests.
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopPolling(); else { poll(); startPolling(); }
+    if (document.hidden) stopPolling(); else { poll(); pollNow(); startPolling(); }
   });
 }
 
-let pollTimer = null, expired = false;
+let pollTimer = null, nowTimer = null, expired = false;
 async function poll() {
   if (expired) return;
   try {
@@ -761,7 +833,16 @@ async function poll() {
     if (err.status === 401) { expired = true; stopPolling(); }
   }
 }
-function startPolling() { if (!pollTimer && !expired) pollTimer = setInterval(poll, 30000); }
-function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
+// The receiver gives a new position every few seconds, so the Overhead now
+// card asks every 5 seconds, and the status line every 30.
+function startPolling() {
+  if (expired) return;
+  if (!pollTimer) pollTimer = setInterval(poll, 30000);
+  if (!nowTimer) nowTimer = setInterval(pollNow, 5000);
+}
+function stopPolling() {
+  clearInterval(pollTimer); clearInterval(nowTimer);
+  pollTimer = nowTimer = null;
+}
 
 main().catch((err) => { $("#status").textContent = problem(err); });
