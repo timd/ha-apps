@@ -679,10 +679,14 @@ function renderNow(data) {
   }
 }
 
+// The card uses the page's radius slider.
+let nowSeq = 0;
 async function pollNow() {
   if (expired) return;
+  const seq = ++nowSeq;
   try {
-    renderNow(await getJSON("api/now"));
+    const data = await getJSON("api/now?radius=" + Math.round(radiusM()));
+    if (seq === nowSeq) renderNow(data);
   } catch (err) {
     $("#now").replaceChildren(el("p", { class: "muted", text: problem(err) }));
     if (err.status === 401) { expired = true; stopPolling(); }
@@ -762,6 +766,7 @@ function onRadius() {
   $("#radius-out").textContent = km(radiusM());
   saved.set("radius", $("#radius").value);
   renderAll();
+  pollNow();
   clearTimeout(trackTimer);
   trackTimer = setTimeout(() => loadTracks().catch((err) => { $("#status").textContent = problem(err); }), 350);
 }

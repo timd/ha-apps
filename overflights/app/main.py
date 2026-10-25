@@ -114,10 +114,10 @@ def read_tracks(db_path, classify, where, args, kinds):
         db.close()
 
 
-def overhead_now(state):
+def overhead_now(state, radius_m=None):
     """The aircraft overhead now, nearest first, with what adsbdb knows of them."""
     out = []
-    for entry in state["collector"].overhead:
+    for entry in state["collector"].overhead(radius_m):
         entry = dict(entry)
         if state["lookup"]:
             entry.update(state["lookup"].details(entry["hex"], entry["callsign"], entry["lat"], entry["lon"]))
@@ -183,14 +183,19 @@ def make_app(state):
         })
 
     @routes.get("/api/now")
-    async def now(_request):
+    async def now(request):
+        """The page passes its radius slider as `radius` (metres)."""
         c = state["collector"]
+        try:
+            radius = min(float(request.query["radius"]), state["capture_m"])
+        except (KeyError, ValueError):
+            radius = c.overhead_m
         return web.json_response({
-            "radius_m": c.overhead_m,
+            "radius_m": radius,
             "max_alt_ft": c.overhead_alt_ft,
             "lookup": state["lookup"] is not None,
             "receiving": c.last_error is None and c.last_ok is not None,
-            "aircraft": overhead_now(state),
+            "aircraft": overhead_now(state, radius),
             "now": time.time(),
         })
 

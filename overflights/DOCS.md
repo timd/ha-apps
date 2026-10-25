@@ -95,7 +95,7 @@ is only a view filter, so you can change it at any time without losing data.
 | `poll_seconds` | How often the App reads the receiver. |
 | `retention_days` | Passes older than this are deleted. |
 | `default_radius_km` | What counts as overhead: the page's radius until a viewer changes it, and the radius for the overflight sensors. |
-| `now_radius_km` | The radius of the Overhead now card and `sensor.overflights_overhead`. |
+| `now_radius_km` | The radius for `sensor.overflights_overhead`. The Overhead now card uses the page's radius slider. |
 | `default_max_altitude_ft` | The altitude limit for the page and the sensors. 0 means any altitude. |
 | `online_lookup` | Look up the registration, type, operator and route of each aircraft overhead at adsbdb.com. |
 | `demo_data` | Adds 60 days of demo passes, made from the receiver's last hour of real tracks. Turn it off to delete them. |
@@ -104,8 +104,9 @@ is only a view filter, so you can change it at any time without losing data.
 ## Overhead now
 
 The card at the top of the page lists the aircraft that are overhead now,
-nearest first. An aircraft is overhead now while it is within
-`now_radius_km` (1 km) of the house and below `default_max_altitude_ft`. The
+nearest first: those within the page's radius of the house, and below
+`default_max_altitude_ft`. Move the radius slider to widen or narrow the
+card. `sensor.overflights_overhead` uses `now_radius_km` (1 km) instead. The
 map marks each one with its callsign. The card updates every 5 seconds.
 
 The receiver gives only the aircraft's address, callsign, position, altitude

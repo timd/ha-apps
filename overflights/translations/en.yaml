@@ -60,8 +60,9 @@ configuration:
   now_radius_km:
     name: Overhead now radius (km)
     description: >-
-      The Overhead now card and the Overhead sensor show the aircraft within
-      this distance of the house, and below the overhead altitude limit.
+      The Overhead sensor counts the aircraft within this distance of the
+      house, and below the overhead altitude limit. The page's Overhead now
+      card uses the page's radius slider instead.
   online_lookup:
     name: Look up aircraft online
     description: >-

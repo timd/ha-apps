@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.2
+
+- The Overhead now card uses the page's radius slider, and updates as the
+  slider moves. `now_radius_km` now sets only `sensor.overflights_overhead`.
+
 ## 0.8.1
 
 - The new option `now_radius_km` (1 km) sets the area of the Overhead now
