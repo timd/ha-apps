@@ -648,6 +648,7 @@ function renderNow(data) {
   const area = `within ${km(data.radius_m)} of the house` +
     (data.max_alt_ft ? ` and below ${ft(data.max_alt_ft)}` : "");
   const live = data.receiving && data.aircraft.length > 0;
+  usedPhotos.clear();
   $("#now-title").textContent = live || !data.last ? "Overhead now" : "Last overhead";
   if (!data.receiving) {
     el("p", { class: "muted", text: "The App is not receiving from the ADS-B receiver." }, box);
@@ -660,15 +661,24 @@ function renderNow(data) {
   } else if (data.receiving) {
     el("p", { class: "muted", text: `Nothing overhead. Aircraft show here while they are ${area}.` }, box);
   }
+  for (const src of photos.keys()) if (!usedPhotos.has(src)) photos.delete(src);
 }
+
+// The card is rebuilt every 5 seconds. It keeps each photo's element, so a
+// photo does not load again or flicker.
+const photos = new Map(), usedPhotos = new Set();
 
 // One aircraft. `past` is a logged pass, with figures for its closest point.
 function planeRow(box, a, past, now) {
   const name = a.callsign || a.hex.toUpperCase();
   const row = el("div", { class: "plane" }, box);
   if (a.photo) {
-    el("img", { src: a.photo, alt: `Photo of ${a.registration || name}`, loading: "lazy",
-                referrerpolicy: "no-referrer" }, row);
+    if (!photos.has(a.photo)) {
+      photos.set(a.photo, el("img", { src: a.photo, alt: `Photo of ${a.registration || name}`,
+                                      referrerpolicy: "no-referrer" }));
+    }
+    usedPhotos.add(a.photo);
+    row.appendChild(photos.get(a.photo));
   }
   const text = el("div", {}, row);
   const who = el("div", { class: "who", text: name }, text);
