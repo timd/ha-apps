@@ -40,6 +40,7 @@ const state = {
   tablePasses: [], // the table's passes, before the radius filter
   tableLimit: 100,
   trackLimitHit: false,
+  trace: null,     // {id, name, pts}: the pass whose Trace button is on
 };
 
 // ---------- helpers ----------
@@ -527,6 +528,9 @@ function setupMap() {
   }).addTo(map);
   density = new DensityLayer().addTo(map);
   nowLayer = L.layerGroup().addTo(map);
+  // The trace has its own pane, above the paths that the card redraws.
+  map.createPane("trace").style.zIndex = 450;
+  traceLayer = L.layerGroup().addTo(map);
   density.setHidden(hiddenKinds);
   radiusCircle = L.circle(home, { radius: radiusM(), color: css("--text-2"), weight: 1.5,
                                   dashArray: "5 4", fill: false, interactive: false }).addTo(map);
@@ -549,6 +553,13 @@ function renderMapLegend() {
     el("span", { class: "swatch", style: `background: ${kindColor(k.id)}` }, item);
     item.append(`${k.plural} ${fmt.format(counts[k.id])}`);
     item.addEventListener("click", () => toggleKind(k.id));
+  }
+  if (state.trace) {
+    const item = el("button", { type: "button", class: "key", "aria-pressed": "true",
+                                title: "Clear the trace from the map" }, box);
+    el("span", { class: "swatch", style: `background: ${css("--text")}` }, item);
+    item.append(`Trace: ${state.trace.name}`);
+    item.addEventListener("click", clearTrace);
   }
   if (state.hasLast) {
     const item = el("button", { type: "button", class: "key", "aria-pressed": String(showLast),
@@ -618,15 +629,7 @@ function renderLatest() {
     type.append(KIND[kind].label);
     el("td", { text: km(dist) }, tr);
     el("td", { text: ft(alt) }, tr);
-    const link = el("td", {}, tr);
-    if (!hex.startsWith("~") && !hex.startsWith("zz")) {
-      const day = d.toISOString().slice(0, 10);
-      // Centre the map on the house, or it opens elsewhere until the trace loads.
-      const [lat, lon] = state.info.home;
-      el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(hex)}&showTrace=${day}` +
-                      `&lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&zoom=9`,
-                target: "_blank", rel: "noopener", text: "Trace" }, link);
-    }
+    traceButton(el("td", {}, tr), id, flight || hex.toUpperCase());
     tr.addEventListener("pointerenter", () => density.setHighlight(id));
     tr.addEventListener("pointerleave", () => density.setHighlight(null));
   }
@@ -722,11 +725,7 @@ function planeRow(box, a, past, now) {
     : [ft(a.altitude_ft), vertical(a.vertical_fpm), a.speed_kt != null && `${fmt.format(a.speed_kt)} kt`,
        `${km(a.distance_m)} away`];
   for (const f of shown) if (f) el("span", { text: f }, figures);
-  if (!a.hex.startsWith("~") && !a.hex.startsWith("zz")) {
-    const day = new Date((past ? a.ts : now || Date.now() / 1000) * 1000).toISOString().slice(0, 10);
-    el("a", { href: `https://globe.adsbexchange.com/?icao=${encodeURIComponent(a.hex)}` + (past ? `&showTrace=${day}` : ""),
-              target: "_blank", rel: "noopener", text: past ? "Trace" : "Live track" }, figures);
-  }
+  if (a.pass_id != null) traceButton(figures, a.pass_id, name);
   if (past && showLast) {
     // The last overflight's path, in yellow over a dark edge so that it
     // stands out on the grey map in both themes.
@@ -753,10 +752,77 @@ async function pollNow() {
       showRadius(data.radius_m);
     }
     renderNow(data);
+    // The trace of an aircraft overhead now grows with each update.
+    if (state.trace && data.aircraft.some((a) => a.pass_id === state.trace.id)) {
+      refreshTrace(state.trace.id);
+    }
   } catch (err) {
     $("#now").replaceChildren(el("p", { class: "muted", text: problem(err) }));
     if (err.status === 401) { expired = true; stopPolling(); }
   }
+}
+
+// ---------- trace ----------
+
+// A Trace button draws one pass's stored path on the map and zooms to it.
+// The path covers only what the App logged: the capture area and the
+// approach to the airport. A second click, or the legend key, clears it.
+let traceLayer;
+function traceButton(parent, id, name) {
+  const on = state.trace?.id === id;
+  const b = el("button", { type: "button", class: "link", "aria-pressed": String(on),
+                           text: on ? "Hide trace" : "Trace" }, parent);
+  b.addEventListener("click", () => (on ? clearTrace() : showTrace(id, name)));
+}
+
+async function showTrace(id, name) {
+  try {
+    const data = await getJSON(`api/track/${id}`);
+    state.trace = { id, name, pts: data.track };
+  } catch (err) {
+    $("#map-note").textContent = problem(err);
+    return;
+  }
+  drawTrace();
+  map.fitBounds(L.latLngBounds(state.trace.pts).extend(state.info.home), { padding: [24, 24] });
+  $("#map").scrollIntoView({ behavior: "smooth", block: "center" });
+  traceChanged();
+}
+
+async function refreshTrace(id) {
+  try {
+    const data = await getJSON(`api/track/${id}`);
+    if (state.trace?.id !== id) return;
+    state.trace.pts = data.track;
+    drawTrace();
+  } catch { /* keep the path drawn so far */ }
+}
+
+function clearTrace() {
+  state.trace = null;
+  drawTrace();
+  traceChanged();
+}
+
+function drawTrace() {
+  traceLayer.clearLayers();
+  const t = state.trace;
+  if (!t) return;
+  // A halo in the surface colour keeps the path clear of the tracks below.
+  const pane = "trace";
+  L.polyline(t.pts, { pane, color: css("--surface"), opacity: 0.8, weight: 8, interactive: false }).addTo(traceLayer);
+  L.polyline(t.pts, { pane, color: css("--text"), weight: 4, interactive: false }).addTo(traceLayer);
+  // The newest position, so the direction of flight shows.
+  L.circleMarker(t.pts[t.pts.length - 1], { pane, radius: 5, color: css("--surface"), weight: 2,
+                                            fillColor: css("--text"), fillOpacity: 1, interactive: false })
+    .addTo(traceLayer);
+}
+
+// Redraw what shows a Trace button or the trace's legend key.
+function traceChanged() {
+  renderLatest();
+  if (state.nowData) renderNow(state.nowData);
+  renderMapLegend();
 }
 
 // ---------- data loading ----------

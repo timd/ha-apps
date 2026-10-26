@@ -146,6 +146,10 @@ th:first-child, td:first-child { text-align: left; }
   border: 1px solid var(--axis); border-radius: 6px; padding: 5px 12px; cursor: pointer;
 }
 a { color: var(--series-1); }
+button.link {
+  font: inherit; color: var(--series-1); background: none; border: 0; padding: 0;
+  text-decoration: underline; cursor: pointer;
+}
 
 .now { margin-top: 16px; }
 .now .muted:last-child { margin-bottom: 0; }

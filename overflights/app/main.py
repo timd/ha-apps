@@ -256,6 +256,20 @@ def make_app(state):
                                        *query_args(request, state["capture_m"]))
         return web.json_response({"limit": MAX_TRACKS, "tracks": rows})
 
+    @routes.get("/api/track/{id}")
+    async def track(request):
+        """One pass's positions, oldest first, as [lat, lon]. The pass may
+        still be open."""
+        try:
+            pid = int(request.match_info["id"])
+        except ValueError:
+            raise web.HTTPBadRequest(text="Give a pass id.")
+        pts = [[lat / 1e5, lon / 1e5] for lat, lon in state["db"].execute(
+            "SELECT lat_e5, lon_e5 FROM positions WHERE pass_id = ? ORDER BY ts", (pid,))]
+        if not pts:
+            raise web.HTTPNotFound(text="No such pass.")
+        return web.json_response({"id": pid, "track": pts})
+
     @routes.get("/api/health")
     async def health(_request):
         ok = state["collector"].last_ok and time.time() - state["collector"].last_ok < 120

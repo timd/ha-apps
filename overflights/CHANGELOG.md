@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.4
+
+- **Trace** now draws the pass's path on the page's own map and zooms to it,
+  instead of opening ADS-B Exchange, whose page no longer showed the track.
+  The path covers what the App logged: the capture area and the approach to
+  the airport. Each row of Latest overflights has a Trace button, and so has
+  each aircraft in the Overhead now card, in place of Live track. A live
+  aircraft's trace grows with each update. Click Hide trace, or the trace's
+  key in the map legend, to clear it.
+
 ## 0.9.3
 
 - The map legend has a **Last overhead** key while the yellow path shows.
