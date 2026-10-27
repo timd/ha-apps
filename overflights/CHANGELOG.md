@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.5
+
+- The Last overhead card no longer starts with "Nothing within … of the
+  house now. The last aircraft that was:". Its title says the same.
+
 ## 0.9.4
 
 - **Trace** now draws the pass's path on the page's own map and zooms to it,

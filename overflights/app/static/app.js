@@ -676,7 +676,6 @@ function renderNow(data) {
   if (live) {
     for (const a of data.aircraft) planeRow(box, a, false);
   } else if (data.last) {
-    el("p", { class: "muted", text: `Nothing ${area} now. The last aircraft that was:` }, box);
     planeRow(box, data.last, true, data.now);
   } else if (data.receiving) {
     el("p", { class: "muted", text: `Nothing overhead. Aircraft show here while they are ${area}.` }, box);
