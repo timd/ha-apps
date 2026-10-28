@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.6
+
+- **When they fly over** has its own class keys, as on the map. Click
+  Arrivals, Departures, Transits or Unclassified to add the class to the
+  heatmap or leave it out; the heatmap adds up the classes shown. The
+  browser remembers the choice.
+
 ## 0.9.5
 
 - The Last overhead card no longer starts with "Nothing within … of the

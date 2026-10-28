@@ -180,7 +180,42 @@ function weekdayCounts() {
   return counts;
 }
 
-function renderWeek(rows) {
+// Classes that the weekly heatmap leaves out. The viewer toggles them in its
+// own legend, as on the map, and the heatmap adds up the classes shown.
+const weekHidden = new Set((saved.get("week_hidden") || "").split(",").filter((k) => k in KIND));
+function toggleWeekKind(kind) {
+  if (weekHidden.has(kind)) weekHidden.delete(kind); else weekHidden.add(kind);
+  saved.set("week_hidden", [...weekHidden].join(","));
+  renderWeek(filtered());
+}
+
+function renderWeekLegend(allRows) {
+  const counts = Object.fromEntries(KINDS.map((k) => [k.id, 0]));
+  for (const p of allRows) counts[p[6]]++;
+  const box = $("#week-legend");
+  box.replaceChildren();
+  const shown = [];
+  for (const k of KINDS) {
+    if (kindFilter() && kindFilter() !== k.id) continue;
+    const on = !weekHidden.has(k.id);
+    if (on) shown.push(k.plural.toLowerCase());
+    const item = el("button", { type: "button", class: "key", "aria-pressed": String(on),
+                                title: `${on ? "Leave out" : "Add"} ${k.plural.toLowerCase()}` }, box);
+    el("span", { class: "swatch", style: `background: ${kindColor(k.id)}` }, item);
+    item.append(`${k.plural} ${fmt.format(counts[k.id])}`);
+    item.addEventListener("click", () => toggleWeekKind(k.id));
+  }
+  el("span", { class: "muted-note", text: "Click a class to add it or leave it out." }, box);
+  const all = shown.length === KINDS.filter((k) => !kindFilter() || kindFilter() === k.id).length;
+  const what = all ? "Overflights" : shown.length
+    ? new Intl.ListFormat("en-GB").format(shown).replace(/^./, (c) => c.toUpperCase())
+    : "No classes chosen, so nothing shows";
+  $("#week-note").textContent = `${what}${shown.length ? " in each hour of the week, in local time." : "."}`;
+}
+
+function renderWeek(allRows) {
+  renderWeekLegend(allRows);
+  const rows = allRows.filter((p) => !weekHidden.has(p[6]));
   const box = $("#week");
   box.replaceChildren();
   const grid = Array.from({ length: 7 }, () => new Array(24).fill(0));
